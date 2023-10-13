@@ -45,18 +45,21 @@ void cardimetry::CardimetryDisplay::getTouch() {
 
 
 bool cardimetry::CardimetryDisplay::configFileExist(fs::FS &fs) {
-  return fs.exists(F("/cmconfig.cfg"));
+  return fs.exists(F("/cmconfig.json"));
 }
 
 
 
 
 bool cardimetry::CardimetryDisplay::createConfigFile(fs::FS &fs) {
-  File config_file = fs.open(F("/cmconfig.cfg"), FILE_WRITE);
+  File cmconfig = fs.open(F("/cmconfig.json"), FILE_WRITE);
+  fs.mkdir(F("/assets"));
+  fs.mkdir(F("/fonts"));
+  fs.mkdir(F("/data"));
 
-  if(config_file) {
+  if(cmconfig) {
     /* Close file */
-    config_file.close();
+    cmconfig.close();
     return true;
   }
   
@@ -69,6 +72,9 @@ bool cardimetry::CardimetryDisplay::createConfigFile(fs::FS &fs) {
 
 
 void cardimetry::CardimetryDisplay::drawWiFiList(int16_t num, String ssid[], int16_t rssi[], String enc[]) {
+
+  /* Reset */
+  this->wifi_selected = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
 
   /* Draw column header */
   this->tft.fillRect(10, 50, 460, 38, 0x0000);
@@ -201,20 +207,349 @@ uint8_t cardimetry::CardimetryDisplay::getSelectedWiFi() {
 
 
 
-void cardimetry::CardimetryDisplay::showKeyboardInput() {
+bool cardimetry::CardimetryDisplay::isWiFiTableExist(fs::FS &fs, String* buf, String ssid) {
+  
+  if(fs.exists(F("/cmwifitable.json"))) {
+    /* Open the wifi table */
+    File cmwifitable = fs.open("/cmwifitable.json", FILE_READ);
+    String json_data = cmwifitable.readString();
+    cmwifitable.close();
 
+    DynamicJsonDocument json_doc(1024);
+    deserializeJson(json_doc, json_data);
+
+    /* Check if the key exists */
+    if(json_doc.containsKey(ssid)) {
+      *buf = json_doc[ssid].as<String>();
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  else {
+    return false;
+  }
+} 
+
+
+
+
+void cardimetry::CardimetryDisplay::showKeyboardInput() {
+  
+  /* Back button */
+  this->tft.fillRoundRect(20, 9, 85, 35, 5, 0x0000);
+  this->tft.setTextColor(0xFFFF, 0x0000);
+  this->tft.setTextSize(2);
+  this->tft.drawCentreString(F("< BACK"), 61, 20, 1);
+
+
+  /* OK button */
+  this->tft.fillRoundRect(375, 9, 85, 35, 5, 0x0000);
+  this->tft.drawCentreString(F("OK >"), 423, 20, 1);
+
+
+  /* Show keyboard */
+  this->drawKeyboard(CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW);
 }
 
 
 
 
 void cardimetry::CardimetryDisplay::actionKeyboardInput() {
+  static uint8_t  keyboard_mode   = CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW,
+                  last_mode       = CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW,
+                  last_idx        = 0;
+  static bool     keyboard_redraw = false,
+                  input_update    = false,
+                  accept_touch    = true;
+  
+  if(this->is_touched && accept_touch) {
 
+    if(120 <= this->touch_y && this->touch_y < 170) {
+
+      for(uint8_t i = 0; i < 10; ++i) {
+
+        if(48*i <= this->touch_x && this->touch_x < 48*(i + 1)) {
+          
+          if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW) {
+            this->keyboard_buf += this->chara_low[i];
+          }
+
+          else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_UP) {
+            this->keyboard_buf += this->chara_up[i];
+          }
+
+          else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM1) {
+            this->keyboard_buf += this->chara_sym1[i];
+          }
+
+          else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM2) {
+            this->keyboard_buf += this->chara_sym2[i];
+          }
+
+          input_update = true;
+        }
+      }
+    }
+
+    else if(170 <= this->touch_y && this->touch_y < 220) {
+
+      if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM1 || keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM2) {
+        
+        for(uint8_t i = 0; i < 10; ++i) {
+
+          if(48*i <= this->touch_x && this->touch_x < 48*(i + 1)) {
+
+            if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM1) {
+              this->keyboard_buf += this->chara_sym1[i + 10];
+            }
+
+            else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM2) {
+              this->keyboard_buf += this->chara_sym2[i + 10];
+            }
+
+            input_update = true;
+          }
+        }
+      }
+
+      else {
+
+        for(uint8_t i = 0; i < 9; ++i) {
+
+          if(24 + 48*i <= this->touch_x && this->touch_x < 24 + 48*(i + 1)) {
+
+            if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW) {
+              this->keyboard_buf += this->chara_low[i + 10];
+            }
+
+            else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_UP) {
+              this->keyboard_buf += this->chara_up[i + 10];
+            }
+
+            input_update = true;
+          }
+        }
+      }
+    }
+
+    else if(220 <= this->touch_y && this->touch_y < 270) {
+
+      if(0 <= this->touch_x && this->touch_x < 72) {
+        last_mode       = keyboard_mode;
+        if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW) {
+          keyboard_mode = CARDIMETRY_DISPLAY_KEYBOARD_MODE_UP;
+        }
+        else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_UP) {
+          keyboard_mode = CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW;
+        }
+        else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM1) {
+          keyboard_mode = CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM2;
+        }
+        else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM2) {
+          keyboard_mode = CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM1;
+        }
+        keyboard_redraw = true;
+      }
+
+      else if(408 <= this->touch_x && this->touch_x < 480) {
+        if(this->keyboard_buf.length() > 0) {
+          this->keyboard_buf.remove(this->keyboard_buf.length() - 1, 1);
+          input_update = true;
+        }
+      }
+
+      else {
+
+        for(uint8_t i = 0; i < 7; ++i) {
+
+          if(72 + 48*i <= this->touch_x && this->touch_x < 72 + 48*(i + 1)) {
+
+            if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW) {
+              this->keyboard_buf += this->chara_low[i + 19];
+            }
+
+            else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_UP) {
+              this->keyboard_buf += this->chara_up[i + 19];
+            }
+
+            else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM1) {
+              this->keyboard_buf += this->chara_sym1[i + 20];
+            }
+
+            else if(keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM2) {
+              this->keyboard_buf += this->chara_sym2[i + 20];
+            }
+
+            input_update = true;
+          }
+        }
+      }
+    }
+
+    else if(270 <= this->touch_y && this->touch_y < 320) {
+      
+      if(0 <= this->touch_x && this->touch_x < 72) {
+        last_mode       = keyboard_mode;
+        keyboard_mode   = (keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM1 || keyboard_mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM2) ? CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW : CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM1;
+        keyboard_redraw = true;
+      }
+
+      else if(72 <= this->touch_x && this->touch_x < 408) {
+        this->keyboard_buf += " ";
+        input_update = true;
+      }
+    }
+
+    accept_touch = false;
+  }
+
+  else if(!this->is_touched) {
+    accept_touch = true;
+  }
+
+  if(keyboard_redraw) {
+    this->drawKeyboard(keyboard_mode);
+    input_update = true;
+    keyboard_redraw = false;
+  }
+
+  if(input_update) {
+    this->tft.fillRoundRect(10, 70, 460, 40, 10, 0xFFFF);
+    this->tft.setTextColor(0x0000);
+    this->tft.setTextSize(2);
+    this->tft.drawCentreString(this->keyboard_buf, 240, 83, 1);
+    input_update = false;
+  }
 }
 
 
 
 
-String cardimetry::CardimetryDisplay::getKeyboardInput() {
-  return String("");
+uint8_t cardimetry::CardimetryDisplay::getKeyboardInput(String* keyboard_buf) {
+  
+  if(((270 <= this->touch_y && this->touch_y < 320) && (408 <= this->touch_x && this->touch_x < 480)) || 
+  ((9 <= this->touch_y && this->touch_y < 44) && (375 <= this->touch_x && this->touch_x < 460))) {
+
+    *keyboard_buf = this->keyboard_buf;
+    this->keyboard_buf.remove(0, this->keyboard_buf.length());
+    return CARDIMETRY_DISPLAY_KEYBOARD_OK;
+  }
+
+  else if((9 <= this->touch_y && this->touch_y < 44) && (20 <= this->touch_x && this->touch_x < 105)) {
+    this->keyboard_buf.remove(0, this->keyboard_buf.length());
+    return CARDIMETRY_DISPLAY_KEYBOARD_BACK;
+  }
+
+  else {
+    return CARDIMETRY_DISPLAY_KEYBOARD_YET;
+  }
+}
+
+
+
+
+void cardimetry::CardimetryDisplay::drawKeyboard(uint8_t mode) {
+
+  /* Entry background */
+  this->tft.fillRect(0, 60, 480, 60, 0x0000);
+  this->tft.fillRoundRect(10, 70, 460, 40, 10, 0xFFFF);
+
+  /* Keyboard background */
+  this->tft.fillRect(0, 120, 480, 200, 0x0000);
+
+  /* Draw button layout */
+  for(uint8_t i = 0; i < 10; ++i) {
+    this->tft.fillRoundRect(4 + 48*i, 124, 42, 42, 8, 0xA514);
+  }
+  if(mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW || mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_UP) {
+    for(uint8_t i = 0; i < 9; ++i) {
+      this->tft.fillRoundRect(28 + 48*i, 174, 42, 42, 8, 0xA514);
+    }
+  }
+  else {
+    for(uint8_t i = 0; i < 10; ++i) {
+      this->tft.fillRoundRect(4 + 48*i, 174, 42, 42, 8, 0xA514);
+    }
+  }
+  for(uint8_t i = 0; i < 7; ++i) {
+    this->tft.fillRoundRect(76 + 48*i, 224, 42, 42, 8, 0xA514);
+  }
+  this->tft.fillRoundRect(76, 274, 332, 42, 8, 0xA514);
+  this->tft.fillRoundRect(4, 224, 66, 42, 8, 0x6B4D);
+  this->tft.fillRoundRect(4, 274, 66, 42, 8, 0x6B4D);
+  this->tft.fillRoundRect(412, 224, 66, 42, 8, 0x6B4D);
+  this->tft.fillRoundRect(412, 274, 66, 42, 8, 0x6B4D);
+
+
+  this->tft.setTextColor(0xFFFF);
+  this->tft.setTextSize(2);
+  if(mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW) {
+    for(uint8_t i = 0; i < 10; ++i) {
+      this->tft.drawCentreString(this->chara_low[i], 25 + 48*i, 137, 1);
+    }
+    for(uint8_t i = 0; i < 9; ++i) {
+      this->tft.drawCentreString(this->chara_low[i + 10], 49 + 48*i, 187, 1);
+    }
+    for(uint8_t i = 0; i < 7; ++i) {
+      this->tft.drawCentreString(this->chara_low[i + 19], 97 + 48*i, 237, 1);
+    }
+    this->tft.drawCentreString("Caps", 37, 237, 1);
+    this->tft.drawCentreString("@", 37, 287, 1);
+    this->tft.drawCentreString("<", 443, 237, 1);
+    this->tft.drawCentreString("->", 443, 287, 1);
+  }
+
+
+  else if(mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_UP) {
+    for(uint8_t i = 0; i < 10; ++i) {
+      this->tft.drawCentreString(this->chara_up[i], 25 + 48*i, 137, 1);
+    }
+    for(uint8_t i = 0; i < 9; ++i) {
+      this->tft.drawCentreString(this->chara_up[i + 10], 49 + 48*i, 187, 1);
+    }
+    for(uint8_t i = 0; i < 7; ++i) {
+      this->tft.drawCentreString(this->chara_up[i + 19], 97 + 48*i, 237, 1);
+    }
+    this->tft.drawCentreString("Caps", 37, 237, 1);
+    this->tft.drawCentreString("@", 37, 287, 1);
+    this->tft.drawCentreString("<", 443, 237, 1);
+    this->tft.drawCentreString("->", 443, 287, 1);
+  }
+
+
+  else if(mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM1) {
+    for(uint8_t i = 0; i < 10; ++i) {
+      this->tft.drawCentreString(this->chara_sym1[i], 25 + 48*i, 137, 1);
+    }
+    for(uint8_t i = 0; i < 10; ++i) {
+      this->tft.drawCentreString(this->chara_sym1[i + 10], 25 + 48*i, 187, 1);
+    }
+    for(uint8_t i = 0; i < 7; ++i) {
+      this->tft.drawCentreString(this->chara_sym1[i + 20], 97 + 48*i, 237, 1);
+    }
+    this->tft.drawCentreString("Caps", 37, 237, 1);
+    this->tft.drawCentreString("@", 37, 287, 1);
+    this->tft.drawCentreString("<", 443, 237, 1);
+    this->tft.drawCentreString("->", 443, 287, 1);
+  }
+
+
+  else if(mode == CARDIMETRY_DISPLAY_KEYBOARD_MODE_SYM2) {
+    for(uint8_t i = 0; i < 10; ++i) {
+      this->tft.drawCentreString(this->chara_sym2[i], 25 + 48*i, 137, 1);
+    }
+    for(uint8_t i = 0; i < 10; ++i) {
+      this->tft.drawCentreString(this->chara_sym2[i + 10], 25 + 48*i, 187, 1);
+    }
+    for(uint8_t i = 0; i < 7; ++i) {
+      this->tft.drawCentreString(this->chara_sym2[i + 20], 97 + 48*i, 237, 1);
+    }
+    this->tft.drawCentreString("Caps", 37, 237, 1);
+    this->tft.drawCentreString("@", 37, 287, 1);
+    this->tft.drawCentreString("<", 443, 237, 1);
+    this->tft.drawCentreString("->", 443, 287, 1);
+  }
 }

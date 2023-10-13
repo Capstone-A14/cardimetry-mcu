@@ -5,8 +5,11 @@
 void cardimetry::cardimetry_conn_task(void* pvParameters) {
 
   /* Local variables */
-  uint8_t task_state  = CARDIMETRY_CONN_IDLE,
-          task_req    = CARDIMETRY_CONN_REQ_NONE;
+  uint8_t   task_state        = CARDIMETRY_CONN_IDLE,
+            task_req          = CARDIMETRY_CONN_REQ_NONE,
+            out_req           = 0;
+  bool      stamp_timer_free  = true;
+  uint64_t  stamp_timer;
 
 
   /* Initiate WiFi */
@@ -104,7 +107,52 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
 
       
       case CARDIMETRY_CONN_WIFI_CONNECT:
+        xSemaphoreTake(cardimetry::cardimetry_wifi_mutex, portMAX_DELAY);
+        
+        if(stamp_timer_free) {
+          stamp_timer = millis();
+          if(cardimetry::cardimetry_conn_wifi_selected_pass == "YEET69") {
+            WiFi.begin(
+              cardimetry::cardimetry_conn_wifi_scanned_ssid[cardimetry::cardimetry_conn_wifi_selected]
+            );
+          }
+          else {
+            WiFi.begin(
+              cardimetry::cardimetry_conn_wifi_scanned_ssid[cardimetry::cardimetry_conn_wifi_selected], 
+              cardimetry::cardimetry_conn_wifi_selected_pass
+            );
+          }
+          stamp_timer_free = false;
+        }
 
+        if(WiFi.status() != WL_CONNECTED) {
+          if(millis() - stamp_timer > CARDIMETRY_CONN_WIFI_CONNECT_TIMEOUT_MS) {
+            /* Notify failed */
+            out_req = CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_FAILED;
+            xQueueSend(cardimetry::cardimetry_display_req_queue, &out_req, portMAX_DELAY);
+            WiFi.disconnect();
+            task_state = CARDIMETRY_CONN_IDLE;
+            stamp_timer_free = true;
+          }
+        }
+        else {
+          /* Save data to cmwifi.json */
+          xSemaphoreTake(cardimetry::cardimetry_sd_mutex, portMAX_DELAY);
+          cm_conn.saveConnWiFiTable(
+            SD,
+            cardimetry::cardimetry_conn_wifi_scanned_ssid[cardimetry::cardimetry_conn_wifi_selected], 
+            cardimetry::cardimetry_conn_wifi_selected_pass
+          );
+          xSemaphoreGive(cardimetry::cardimetry_sd_mutex);
+
+          /* Notify success */
+          out_req = CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_SUCCESS;
+          xQueueSend(cardimetry::cardimetry_display_req_queue, &out_req, portMAX_DELAY);
+          task_state = CARDIMETRY_CONN_IDLE;
+          stamp_timer_free = true;
+        }
+
+        xSemaphoreGive(cardimetry::cardimetry_wifi_mutex);
         break;
     }
 

@@ -5,8 +5,8 @@
 #include "CardimetryConn.h"
 // #include "CardimetrySensor.h"
 
-#define CARDIMETRY_DISPLAY_TASK_STACK_SIZE  4096
-#define CARDIMETRY_CONN_TASK_STACK_SIZE     2048
+#define CARDIMETRY_DISPLAY_TASK_STACK_SIZE  6144
+#define CARDIMETRY_CONN_TASK_STACK_SIZE     3072
 #define CARDIMETRY_SENSOR_TASK_STACK_SIZE   2048
 #define CARDIMETRY_UART_TASK_STACK_SIZE     2048
 
@@ -20,7 +20,7 @@
 #define CARDIMETRY_SENSOR_TASK_CORE   1
 #define CARDIMETRY_UART_TASK_CORE     0
 
-#define CARDIMETRY_DISPLAY_TASK_DELAY 33
+#define CARDIMETRY_DISPLAY_TASK_DELAY 40
 #define CARDIMETRY_CONN_TASK_DELAY    100
 #define CARDIMETRY_SENSOR_TASK_DELAY  10
 #define CARDIMETRY_UART_TASK_DELAY    100
@@ -34,7 +34,9 @@
 #define CARDIMETRY_SENSOR_ECG_DATA_QUEUE_LEN  300
 #define CARDIMETRY_SENSOR_IMU_DATA_QUEUE_LEN  100
 
-#define CARDIMETRY_DISPLAY_REQ_NONE 0
+#define CARDIMETRY_DISPLAY_REQ_NONE                 0
+#define CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_SUCCESS 1
+#define CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_FAILED  2
 
 #define CARDIMETRY_CONN_REQ_NONE          0
 #define CARDIMETRY_CONN_REQ_WIFI_SCAN     1
@@ -65,7 +67,8 @@ namespace cardimetry {
                         cardimetry_sensor_imu_data_queue;
 
   extern String   cardimetry_conn_wifi_scanned_ssid[CARDIMETRY_CONN_WIFI_SCAN_MAX],
-                  cardimetry_conn_wifi_scanned_enc[CARDIMETRY_CONN_WIFI_SCAN_MAX];
+                  cardimetry_conn_wifi_scanned_enc[CARDIMETRY_CONN_WIFI_SCAN_MAX],
+                  cardimetry_conn_wifi_selected_pass;
   extern int16_t  cardimetry_conn_wifi_scanned_num,
                   cardimetry_conn_wifi_scanned_rssi[CARDIMETRY_CONN_WIFI_SCAN_MAX];
   extern uint8_t  cardimetry_conn_wifi_selected;

@@ -19,7 +19,8 @@ QueueHandle_t cardimetry::cardimetry_display_req_queue,
               cardimetry::cardimetry_sensor_imu_data_queue;
 
 String  cardimetry::cardimetry_conn_wifi_scanned_ssid[CARDIMETRY_CONN_WIFI_SCAN_MAX],
-        cardimetry::cardimetry_conn_wifi_scanned_enc[CARDIMETRY_CONN_WIFI_SCAN_MAX];
+        cardimetry::cardimetry_conn_wifi_scanned_enc[CARDIMETRY_CONN_WIFI_SCAN_MAX],
+        cardimetry::cardimetry_conn_wifi_selected_pass;
 int16_t cardimetry::cardimetry_conn_wifi_scanned_num,
         cardimetry::cardimetry_conn_wifi_scanned_rssi[CARDIMETRY_CONN_WIFI_SCAN_MAX];
 uint8_t cardimetry::cardimetry_conn_wifi_selected;
