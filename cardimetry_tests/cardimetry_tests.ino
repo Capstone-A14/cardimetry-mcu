@@ -1,6 +1,7 @@
 // #include "touch_test.h"
 // #include "wifiscan_test.h"
-#include "download_test.h"
+// #include "download_test.h"
+#include "transmit_test.h"
 
 void setup() {
   
@@ -17,6 +18,10 @@ void setup() {
   #ifdef __DOWNLOAD_TEST_H__
     download_begin();
   #endif
+
+  #ifdef __TRANSMIT_TEST_H__
+    transmit_begin();
+  #endif
 }
 
 void loop() {
@@ -31,5 +36,9 @@ void loop() {
 
   #ifdef __DOWNLOAD_TEST_H__
     download_loop();
+  #endif
+
+  #ifdef __TRANSMIT_TEST_H__
+    transmit_loop();
   #endif
 }
