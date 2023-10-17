@@ -2,6 +2,7 @@
 // #include "wifiscan_test.h"
 // #include "download_test.h"
 #include "transmit_test.h"
+// #include "time_test.h"
 
 void setup() {
   
@@ -22,6 +23,10 @@ void setup() {
   #ifdef __TRANSMIT_TEST_H__
     transmit_begin();
   #endif
+
+  #ifdef __TIME_TEST_H__
+    time_begin();
+  #endif
 }
 
 void loop() {
@@ -40,5 +45,9 @@ void loop() {
 
   #ifdef __TRANSMIT_TEST_H__
     transmit_loop();
+  #endif
+
+  #ifdef __TIME_TEST_H__
+    time_loop();
   #endif
 }

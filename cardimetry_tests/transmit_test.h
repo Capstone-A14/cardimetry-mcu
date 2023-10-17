@@ -6,10 +6,10 @@
 #include "protocentral_ads1293.h"
 #include "EspMQTTClient.h"
 
-#define WIFI_SSID "Kost Jakal"
-#define WIFI_PASS "kucinglisa16"
+#define WIFI_SSID "DhonanAP_HP"
+#define WIFI_PASS "12345678"
 
-#define MQTT_SERVER "192.168.1.12"
+#define MQTT_SERVER "192.168.42.102"
 #define MQTT_PORT   1883
 #define MQTT_TOPIC  "/dev/ecg/pub"
 
@@ -19,6 +19,7 @@
 
 #define ECG_SAMPLING_TIME_MS          10
 #define ECG_QUEUE_SIZE                100
+#define ECG_MOCK_SIZE                 116
 #define IMU_SAMPLING_COUNT_AFTER_ECG  2
 
 #define TRANSMISSION_RATE_MS 800
@@ -29,7 +30,7 @@ EspMQTTClient client(
   WIFI_SSID,
   WIFI_PASS,
   MQTT_SERVER,
-  "Cardimetry",
+  "CardimetryTest",
   MQTT_PORT
 );
 
@@ -64,11 +65,23 @@ void sensor_get_task(void* pvParameters) {
   SPI.begin();
 
   /* Create Mutex */
-  ecg1_mutex = xSemaphoreCreateMutex();
-  ecg2_mutex = xSemaphoreCreateMutex();
+  ecg1_mutex      = xSemaphoreCreateMutex();
+  ecg2_mutex      = xSemaphoreCreateMutex();
   ecg_ready_mutex = xSemaphoreCreateMutex();
 
   /* Start ADS1293 */
+  uint8_t ecg_cnt = 0;
+  int ecg_mock[116] = {
+    2041,2043,2037,2047,2060,2062,2051,2023,2014,2027,2034,2033,2040,2047,
+    2047,2053,2058,2064,2059,2063,2061,2052,2053,2038,1966,1885,1884,2009,
+    2129,2166,2137,2102,2086,2077,2067,2067,2060,2059,2062,2062,2060,2057,
+    2045,2047,2057,2054,2042,2029,2027,2018,2007,1995,2001,2012,2024,2039,
+    2068,2092,2111,2125,2131,2148,2137,2138,2128,2128,2115,2099,2097,2096,
+    2101,2101,2091,2073,2076,2077,2084,2081,2088,2092,2070,2069,2074,2077,
+    2075,2068,2064,2060,2062,2074,2075,2074,2075,2063,2058,2058,2064,2064,
+    2070,2074,2067,2060,2062,2063,2061,2059,2048,2052,2049,2048,2051,2059,
+    2059,2066,2077,2073
+  };
   ADS1293.ads1293Begin3LeadECG();
   vTaskDelay(pdMS_TO_TICKS(10));
 
@@ -77,9 +90,10 @@ void sensor_get_task(void* pvParameters) {
 
     /* ECG sampling */
     if(digitalRead(ADS1293_DRDY_PIN) == ADS1293_READY) {
-      int32_t lead1 = ADS1293.getECGdata(1),
-              lead2 = ADS1293.getECGdata(2),
-              lead3 = lead2 - lead1;
+      int32_t lead1 = ecg_mock[ecg_cnt],
+              lead2 = ecg_mock[ecg_cnt],
+              lead3 = ecg_mock[ecg_cnt];
+      ecg_cnt = (++ecg_cnt) % ECG_MOCK_SIZE;
       
       if(ecg_json_sw) {
         xSemaphoreTake(ecg1_mutex, portMAX_DELAY);
@@ -149,8 +163,8 @@ void data_transmit_task(void* pvParameters) {
         ecg2_rd = false;
 
   /* Additional */
-  client.setMaxPacketSize(4096);
-  // client.enableDebuggingMessages(); 
+  client.setMaxPacketSize(6400);
+  client.enableDebuggingMessages(); 
 
   while(true) {
 
@@ -195,12 +209,10 @@ void data_transmit_task(void* pvParameters) {
       
       if(client.publish(MQTT_TOPIC, cmml_data.c_str())) {
         Serial.println("Published!");
-        Serial.println(cmml_data);
         cmml_data = "";
       }
       else {
         Serial.println("Failed to publish ECG2!");
-        Serial.println(cmml_data);
         cmml_data = "";
       }
     }
