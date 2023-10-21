@@ -10,6 +10,10 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
             out_req           = 0;
   bool      stamp_timer_free  = true;
   uint64_t  stamp_timer;
+  float     battery_read  = 0.,
+            battery_perc  = 0.,
+            battery_perc_temp;
+  struct tm timeinfo;
 
 
   /* Initiate WiFi */
@@ -50,6 +54,25 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
     switch(task_state) {
 
       case CARDIMETRY_CONN_IDLE:
+        
+        /* Calculate battery percentage */
+        battery_read      = (CARDIMETRY_CONN_BAT_COMPFILT)*((float)analogRead(CARDIMETRY_CONN_BAT_PIN)) + (1.0 - CARDIMETRY_CONN_BAT_COMPFILT)*battery_read;
+        battery_perc_temp = (battery_read - CARDIMETRY_CONN_BAT_LOW)*100./(CARDIMETRY_CONN_BAT_FULL - CARDIMETRY_CONN_BAT_LOW);
+        battery_perc      = (fabs(battery_perc_temp - battery_perc) < CARDIMETRY_CONN_BAT_TOLERANCE) ? battery_perc : round(battery_perc_temp);
+        xSemaphoreTake(cardimetry::cardimetry_bat_mutex, portMAX_DELAY);
+        cardimetry::cardimetry_conn_bat_perc = (uint16_t)((int)battery_perc);
+        xSemaphoreGive(cardimetry::cardimetry_bat_mutex);
+
+        /* Get time from NTP */
+        if(getLocalTime(&timeinfo, 500)){
+          xSemaphoreTake(cardimetry::cardimetry_time_mutex, portMAX_DELAY);
+          cardimetry::cardimetry_conn_time_m  = timeinfo.tm_min;
+          cardimetry::cardimetry_conn_time_h  = timeinfo.tm_hour;
+          cardimetry::cardimetry_conn_time_d  = timeinfo.tm_mday;
+          cardimetry::cardimetry_conn_time_mn = timeinfo.tm_mon;
+          cardimetry::cardimetry_conn_time_y  = timeinfo.tm_year;
+          xSemaphoreGive(cardimetry::cardimetry_time_mutex);
+        }
         break;
 
 
@@ -98,7 +121,16 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
                 break;
             }
           }
+
+          out_req = CARDIMETRY_DISPLAY_REQ_WIFI_SCAN_SUCCESS;
+          xQueueSend(cardimetry::cardimetry_display_req_queue, &out_req, portMAX_DELAY);
         }
+
+        else {
+          out_req = CARDIMETRY_DISPLAY_REQ_WIFI_SCAN_FAILED;
+          xQueueSend(cardimetry::cardimetry_display_req_queue, &out_req, portMAX_DELAY);
+        }
+
         xSemaphoreGive(cardimetry::cardimetry_wifi_mutex);
         task_state = CARDIMETRY_CONN_IDLE;
         break;

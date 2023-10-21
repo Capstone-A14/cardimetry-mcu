@@ -8,6 +8,7 @@
 #include "Adafruit_GFX.h"
 #include "Adafruit_FT6206.h"
 #include "TFT_eSPI.h"
+#include "TJpg_Decoder.h"
 #include "ArduinoJson.h"
 
 #define CARDIMETRY_DISPLAY_TFT_CS   5
@@ -22,6 +23,8 @@
 
 #define CARDIMETRY_DISPLAY_SD_CS              16
 #define CARDIMETRY_DISPLAY_SD_INIT_TIMEOUT_MS 3000
+
+#define CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH "/assets/cmloadscreen.jpg"
 
 #define CARDIMETRY_DISPLAY_LOADSCREEN_SD_READ               0
 #define CARDIMETRY_DISPLAY_LOADSCREEN_SD_FAILED             1
@@ -53,6 +56,7 @@
 
 namespace cardimetry{
 
+
   class CardimetryDisplay{
 
     private:
@@ -82,6 +86,7 @@ namespace cardimetry{
       String  keyboard_buf  = "";
 
       void drawKeyboard(uint8_t mode);
+      static bool drawJPG(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap);
 
     public:
       TFT_eSPI        tft  = TFT_eSPI();

@@ -13,12 +13,17 @@ void cardimetry::CardimetryDisplay::begin() {
 
   /* Pinmoding nessecary pins */
   pinMode(CARDIMETRY_DISPLAY_TFT_LED, OUTPUT);
+  pinMode(CARDIMETRY_DISPLAY_TFT_LED, OUTPUT);
+  digitalWrite(CARDIMETRY_DISPLAY_TFT_LED, HIGH);
 
 
   /* Start TFT display */
   this->tft.begin();
   this->tft.setRotation(CARDIMETRY_DISPLAY_ROTATION);
   this->tft.fillScreen(0xFFFF);
+  this->tft.setSwapBytes(true);
+  TJpgDec.setJpgScale(1);
+  TJpgDec.setCallback(this->drawJPG);
 
 
   /* Start capcitive touch */
@@ -552,4 +557,16 @@ void cardimetry::CardimetryDisplay::drawKeyboard(uint8_t mode) {
     this->tft.drawCentreString("<", 443, 237, 1);
     this->tft.drawCentreString("->", 443, 287, 1);
   }
+}
+
+
+
+
+bool cardimetry::CardimetryDisplay::drawJPG(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
+  TFT_eSPI tftemp  = TFT_eSPI();
+  tftemp.setRotation(CARDIMETRY_DISPLAY_ROTATION);
+  tftemp.setSwapBytes(true);
+  if (y >= CARDIMETRY_DISPLAY_HEIGHT || x >= CARDIMETRY_DISPLAY_WIDTH) return 0;
+  tftemp.pushImage(x, y, w, h, bitmap);
+  return true;
 }

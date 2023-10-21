@@ -21,9 +21,9 @@
 #define CARDIMETRY_UART_TASK_CORE     0
 
 #define CARDIMETRY_DISPLAY_TASK_DELAY 40
-#define CARDIMETRY_CONN_TASK_DELAY    100
+#define CARDIMETRY_CONN_TASK_DELAY    500
 #define CARDIMETRY_SENSOR_TASK_DELAY  10
-#define CARDIMETRY_UART_TASK_DELAY    100
+#define CARDIMETRY_UART_TASK_DELAY    200
 
 #define CARDIMETRY_DISPLAY_TASK_REQ_QUEUE_LEN 8
 #define CARDIMETRY_CONN_TASK_REQ_QUEUE_LEN    8
@@ -35,8 +35,10 @@
 #define CARDIMETRY_SENSOR_IMU_DATA_QUEUE_LEN  100
 
 #define CARDIMETRY_DISPLAY_REQ_NONE                 0
-#define CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_SUCCESS 1
-#define CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_FAILED  2
+#define CARDIMETRY_DISPLAY_REQ_WIFI_SCAN_SUCCESS    1
+#define CARDIMETRY_DISPLAY_REQ_WIFI_SCAN_FAILED     2
+#define CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_SUCCESS 3
+#define CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_FAILED  4
 
 #define CARDIMETRY_CONN_REQ_NONE          0
 #define CARDIMETRY_CONN_REQ_WIFI_SCAN     1
@@ -57,7 +59,9 @@ namespace cardimetry {
                       cardimetry_uart_task_handler;
 
   extern SemaphoreHandle_t  cardimetry_sd_mutex,
-                            cardimetry_wifi_mutex;
+                            cardimetry_wifi_mutex,
+                            cardimetry_time_mutex,
+                            cardimetry_bat_mutex;
 
   extern QueueHandle_t  cardimetry_display_req_queue,
                         cardimetry_conn_req_queue,
@@ -72,6 +76,14 @@ namespace cardimetry {
   extern int16_t  cardimetry_conn_wifi_scanned_num,
                   cardimetry_conn_wifi_scanned_rssi[CARDIMETRY_CONN_WIFI_SCAN_MAX];
   extern uint8_t  cardimetry_conn_wifi_selected;
+
+  extern int16_t  cardimetry_conn_bat_perc,
+                  cardimetry_conn_signal;
+  extern uint16_t cardimetry_conn_time_m,
+                  cardimetry_conn_time_h,
+                  cardimetry_conn_time_d,
+                  cardimetry_conn_time_mn,
+                  cardimetry_conn_time_y;
 
 
   void cardimetry_display_task(void* pvParameters);

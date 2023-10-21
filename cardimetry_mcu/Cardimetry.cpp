@@ -9,7 +9,9 @@ TaskHandle_t  cardimetry::cardimetry_display_task_handler,
               cardimetry::cardimetry_uart_task_handler;
 
 SemaphoreHandle_t cardimetry::cardimetry_sd_mutex,
-                  cardimetry::cardimetry_wifi_mutex;
+                  cardimetry::cardimetry_wifi_mutex,
+                  cardimetry::cardimetry_time_mutex,
+                  cardimetry::cardimetry_bat_mutex;
 
 QueueHandle_t cardimetry::cardimetry_display_req_queue,
               cardimetry::cardimetry_conn_req_queue,
@@ -25,6 +27,14 @@ int16_t cardimetry::cardimetry_conn_wifi_scanned_num,
         cardimetry::cardimetry_conn_wifi_scanned_rssi[CARDIMETRY_CONN_WIFI_SCAN_MAX];
 uint8_t cardimetry::cardimetry_conn_wifi_selected;
 
+int16_t   cardimetry::cardimetry_conn_bat_perc  = 0,
+          cardimetry::cardimetry_conn_signal;
+uint16_t  cardimetry::cardimetry_conn_time_m,
+          cardimetry::cardimetry_conn_time_h,
+          cardimetry::cardimetry_conn_time_d,
+          cardimetry::cardimetry_conn_time_mn,
+          cardimetry::cardimetry_conn_time_y;
+
 
 
 
@@ -33,6 +43,8 @@ void cardimetry::cardimetry_begin() {
   /* Create mutexes */
   cardimetry::cardimetry_sd_mutex   = xSemaphoreCreateMutex();
   cardimetry::cardimetry_wifi_mutex = xSemaphoreCreateMutex();
+  cardimetry::cardimetry_time_mutex = xSemaphoreCreateMutex(),
+  cardimetry::cardimetry_bat_mutex  = xSemaphoreCreateMutex();
 
 
   /* Create queue handlers */

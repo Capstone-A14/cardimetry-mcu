@@ -11,6 +11,15 @@ cardimetry::CardimetryConn::~CardimetryConn() {}
 
 void cardimetry::CardimetryConn::begin() {
 
+  /* NTP config */
+  sntp_servermode_dhcp(1);
+  configTime(
+    CARDIMETRY_CONN_NTP_GMT_OFFSET_S, 
+    CARDIMETRY_CONN_NTP_DL_OFFSET_S, 
+    CARDIMETRY_CONN_NTP_SERVER_1, 
+    CARIDMETRY_CONN_NTP_SERVER_2
+  );
+
   /* Start ESP32 WiFi as station */
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();

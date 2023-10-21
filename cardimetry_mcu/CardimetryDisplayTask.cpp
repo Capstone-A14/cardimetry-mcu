@@ -9,6 +9,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
             task_req          = CARDIMETRY_DISPLAY_REQ_NONE,
             out_req           = 0;
   bool      screen_refresh    = true,
+            wifi_table_exist  = false,
             stamp_timer_free  = true;
   uint64_t  stamp_timer;
   uint8_t   selected_wifi_buf = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
@@ -35,6 +36,18 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
         break;
 
 
+      case CARDIMETRY_DISPLAY_REQ_WIFI_SCAN_SUCCESS:
+        task_state      = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_SCAN_SUCCESS;
+        screen_refresh  = true;
+        break;
+
+
+      case CARDIMETRY_DISPLAY_REQ_WIFI_SCAN_FAILED:
+        task_state      = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_SCAN_FAILED;
+        screen_refresh  = true;
+        break;
+
+
       case CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_SUCCESS:
         task_state      = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_CONNECT_SUCCESS;
         screen_refresh  = true;
@@ -56,7 +69,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
         /* On-screen notif */
         if(screen_refresh) {
-          cm_display.tft.fillScreen(0xFFFF);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           cm_display.tft.setTextColor(0x0000, 0xFFFF);
           cm_display.tft.setTextSize(2);
           cm_display.tft.drawCentreString(F("Reading SD card..."), 240, 280, 1);
@@ -102,7 +115,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
         /* On-screen notif */
         if(screen_refresh) {
-          cm_display.tft.fillScreen(0xFFFF);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           cm_display.tft.setTextColor(0x0000, 0xFFFF);
           cm_display.tft.setTextSize(2);
           cm_display.tft.drawCentreString(F("Failed to read SD card."), 240, 265, 1);
@@ -133,7 +146,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
         /* On-screen notif */
         if(screen_refresh) {
-          cm_display.tft.fillScreen(0xFFFF);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           cm_display.tft.setTextColor(0x0000, 0xFFFF);
           cm_display.tft.setTextSize(2);
           cm_display.tft.drawCentreString(F("Configuring SD Card..."), 240, 280, 1);
@@ -164,7 +177,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
         /* On-screen notif */
         if(screen_refresh) {
-          cm_display.tft.fillScreen(0xFFFF);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           cm_display.tft.setTextColor(0x0000, 0xFFFF);
           cm_display.tft.setTextSize(2);
           cm_display.tft.drawCentreString(F("Reading config file..."), 240, 280, 1);
@@ -183,7 +196,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
         /* On-screen notif */
         if(screen_refresh) {
-          cm_display.tft.fillScreen(0xFFFF);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           cm_display.tft.setTextColor(0x0000, 0xFFFF);
           cm_display.tft.setTextSize(2);
           cm_display.tft.drawCentreString(F("Scanning WiFi AP(s)..."), 240, 280, 1);
@@ -195,21 +208,6 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
           vTaskDelay(pdMS_TO_TICKS(CARDIMETRY_DISPLAY_LOADSCREEN_WAIT_MS));
           screen_refresh = false;
         }
-
-        /* Receive number of wifi scanned */
-        xSemaphoreTake(cardimetry::cardimetry_wifi_mutex, portMAX_DELAY);
-
-        if(cardimetry::cardimetry_conn_wifi_scanned_num == 0) {
-          task_state     = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_SCAN_FAILED;
-          screen_refresh = true;
-        }
-
-        else if(cardimetry::cardimetry_conn_wifi_scanned_num > 0) {
-          task_state     = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_SCAN_SUCCESS;
-          screen_refresh = true;
-        }
-
-        xSemaphoreGive(cardimetry::cardimetry_wifi_mutex);
         break;
 
 
@@ -219,7 +217,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
         /* On-screen notif */
         if(screen_refresh) {
-          cm_display.tft.fillScreen(0xFFFF);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           cm_display.tft.setTextColor(0x0000, 0xFFFF);
           cm_display.tft.setTextSize(2);
           cm_display.tft.drawCentreString(F("Failed to find any WiFi AP."), 240, 265, 1);
@@ -260,7 +258,8 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
             cardimetry::cardimetry_conn_wifi_scanned_enc
           );
           xSemaphoreGive(cardimetry::cardimetry_wifi_mutex);
-          
+
+          vTaskDelay(pdMS_TO_TICKS(CARDIMETRY_DISPLAY_LOADSCREEN_WAIT_MS));
           screen_refresh = false;
         }
 
@@ -287,11 +286,14 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
             task_state      = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_CONNECT;
             screen_refresh  = true;
           }
+
           else if(cm_display.isWiFiTableExist(SD, &keyboard_buf, cardimetry::cardimetry_conn_wifi_scanned_ssid[selected_wifi_buf])) {
             cardimetry::cardimetry_conn_wifi_selected_pass = keyboard_buf;
-            task_state      = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_CONNECT;
-            screen_refresh  = true;
+            task_state        = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_CONNECT;
+            wifi_table_exist  = true;
+            screen_refresh    = true;
           }
+
           else {
             task_state      = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_PASSWORD;
             screen_refresh  = true;
@@ -321,6 +323,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
         /* Receive touch and do action */
         cm_display.actionKeyboardInput();
+
         if(cm_display.getKeyboardInput(&keyboard_buf) == CARDIMETRY_DISPLAY_KEYBOARD_OK) {
           xSemaphoreTake(cardimetry::cardimetry_wifi_mutex, portMAX_DELAY);
           cardimetry::cardimetry_conn_wifi_selected_pass = keyboard_buf;
@@ -329,6 +332,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
           task_state      = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_CONNECT;
           screen_refresh  = true;
         }
+
         else if(cm_display.getKeyboardInput(&keyboard_buf) == CARDIMETRY_DISPLAY_KEYBOARD_BACK) {
           selected_wifi_buf = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
           task_state        = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_SCAN_SUCCESS;
@@ -343,7 +347,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
         
         /* On-screen notif*/
         if(screen_refresh) {
-          cm_display.tft.fillScreen(0xFFFF);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           cm_display.tft.setTextColor(0x0000, 0xFFFF);
           cm_display.tft.setTextSize(2);
           xSemaphoreTake(cardimetry::cardimetry_wifi_mutex, portMAX_DELAY);
@@ -367,7 +371,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
         
         /* On-screen notif */
         if(screen_refresh) {
-          cm_display.tft.fillScreen(0xFFFF);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           cm_display.tft.setTextColor(0x0000, 0xFFFF);
           cm_display.tft.setTextSize(2);
           xSemaphoreTake(cardimetry::cardimetry_wifi_mutex, portMAX_DELAY);
@@ -377,6 +381,9 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
           vTaskDelay(pdMS_TO_TICKS(CARDIMETRY_DISPLAY_LOADSCREEN_WAIT_MS));
           screen_refresh = false;
         }
+
+        task_state      = CARDIMETRY_DISPLAY_MAIN_MENU; 
+        screen_refresh  = true;
         break;
 
 
@@ -386,7 +393,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
         /* On-screen notif */
         if(screen_refresh) {
-          cm_display.tft.fillScreen(0xFFFF);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           cm_display.tft.setTextColor(0x0000, 0xFFFF);
           cm_display.tft.setTextSize(2);
           xSemaphoreTake(cardimetry::cardimetry_wifi_mutex, portMAX_DELAY);
@@ -398,9 +405,16 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
         }
 
         /* Rescan WiFi */
-        task_state        = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_SCAN;
-        selected_wifi_buf = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
-        screen_refresh    = true;
+        if(wifi_table_exist) {
+          task_state        = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_PASSWORD;
+          screen_refresh    = true;
+        } 
+
+        else {
+          task_state        = CARDIMETRY_DISPLAY_LOADSCREEN_WIFI_SCAN;
+          selected_wifi_buf = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
+          screen_refresh    = true;
+        }
         break;
 
 
@@ -419,6 +433,31 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
 
       case CARDIMETRY_DISPLAY_MAIN_MENU:
+
+        /* On-screen notif */
+        if(screen_refresh) {
+          cm_display.tft.fillScreen(0xFFFF);
+          cm_display.tft.setTextColor(0x0000, 0xFFFF);
+          cm_display.tft.setTextSize(3);
+          screen_refresh = false;
+        }
+
+        cm_display.tft.drawCentreString("                  ", 240, 160, 1);
+        cm_display.tft.drawCentreString("                  ", 240, 280, 1);
+
+        xSemaphoreTake(cardimetry::cardimetry_time_mutex, portMAX_DELAY);
+        cm_display.tft.drawCentreString(
+          String(cardimetry::cardimetry_conn_time_h) + String(':') + String(cardimetry::cardimetry_conn_time_m),
+          240, 160, 1
+        );
+        xSemaphoreGive(cardimetry::cardimetry_time_mutex);
+
+        xSemaphoreTake(cardimetry::cardimetry_bat_mutex, portMAX_DELAY);
+        cm_display.tft.drawCentreString(
+          String(cardimetry::cardimetry_conn_bat_perc),
+          240, 280, 1
+        );
+        xSemaphoreGive(cardimetry::cardimetry_bat_mutex);
         break;
     }
 

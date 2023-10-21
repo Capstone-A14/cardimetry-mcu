@@ -5,7 +5,14 @@
 #include <SD.h>
 #include <FS.h>
 #include <WiFi.h>
+#include "time.h"
+#include "sntp.h"
 #include "ArduinoJson.h"
+
+#define CARDIMETRY_CONN_NTP_SERVER_1      "pool.ntp.org"
+#define CARIDMETRY_CONN_NTP_SERVER_2      "time.nist.gov"
+#define CARDIMETRY_CONN_NTP_GMT_OFFSET_S  21600
+#define CARDIMETRY_CONN_NTP_DL_OFFSET_S   3600
 
 #define CARDIMETRY_CONN_IDLE          0
 #define CARDIMETRY_CONN_WIFI_SCAN     1
@@ -16,6 +23,16 @@
 
 #define CARDIMETRY_CONN_WIFI_WAIT_TIME_MS       100
 #define CARDIMETRY_CONN_WIFI_CONNECT_TIMEOUT_MS 5000
+
+#define CARDIMETRY_CONN_BAT_PIN       36
+#define CARDIMETRY_CONN_BAT_FULL      2024.0
+#define CARDIMETRY_CONN_BAT_LOW       1600.0
+#define CARDIMETRY_CONN_BAT_TOLERANCE 1.4
+#define CARDIMETRY_CONN_BAT_COMPFILT  0.075
+
+#define CARDIMETRY_CONN_RSSI_3  -50
+#define CARDIMETRY_CONN_RSSI_2  -70
+#define CARDIMETRY_CONN_RSSI_1  -90
 
 
 namespace cardimetry{
