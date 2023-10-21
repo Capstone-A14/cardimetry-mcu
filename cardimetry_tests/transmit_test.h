@@ -5,6 +5,8 @@
 #include <SPI.h>
 #include "protocentral_ads1293.h"
 #include "EspMQTTClient.h"
+#include "time.h"
+#include "sntp.h"
 
 #define WIFI_SSID "DhonanAP_HP"
 #define WIFI_PASS "12345678"
@@ -12,6 +14,12 @@
 #define MQTT_SERVER "192.168.42.102"
 #define MQTT_PORT   1883
 #define MQTT_TOPIC  "/dev/ecg/pub"
+#define MQTT_TOPIC1 "/dev/time/pub"
+
+#define NTP_SERVER_1  "pool.ntp.org"
+#define NTP_SERVER_2  "time.nist.gov"
+#define GMT_OFFSET_S  21600
+#define DL_OFFSET_S   3600
 
 #define ADS1293_DRDY_PIN  35
 #define ADS1293_CS_PIN    32
@@ -158,9 +166,15 @@ void onConnectionEstablished() {
 
 void data_transmit_task(void* pvParameters) {
   /* Local variables */
-  String        cmml_data;
-  bool  ecg1_rd = false,
-        ecg2_rd = false;
+  String  cmml_data,
+          unix_ts;
+  bool  ecg1_rd       = false,
+        ecg2_rd       = false,
+        when_connect  = true;
+
+  /* Set NTP */
+  sntp_servermode_dhcp(1);
+  configTime(GMT_OFFSET_S, DL_OFFSET_S, NTP_SERVER_1, NTP_SERVER_2);
 
   /* Additional */
   client.setMaxPacketSize(6400);
@@ -179,6 +193,14 @@ void data_transmit_task(void* pvParameters) {
     ecg2_ready  = false;
     xSemaphoreGive(ecg_ready_mutex);
 
+    if(when_connect) {
+      struct tm timeinfo;
+      if(getLocalTime(&timeinfo)) {
+        time_t unix_time = mktime(&timeinfo);
+        unix_ts = String(unix_time);
+      }
+    }
+
     if(ecg1_rd) {
       xSemaphoreTake(ecg1_mutex, portMAX_DELAY);
       cmml_data   = String('$') + ecg1_ts + String('$') + ecg1_lead1 + String('$') + ecg1_lead2 + String('$') + ecg1_lead3;
@@ -188,13 +210,25 @@ void data_transmit_task(void* pvParameters) {
       ecg1_ts     = "";
       xSemaphoreGive(ecg1_mutex);
       
-      if(client.publish(MQTT_TOPIC, cmml_data.c_str())) {
-        Serial.println("Published!");
-        cmml_data = "";
+      if(when_connect) {
+        if(client.publish(MQTT_TOPIC1, unix_ts)) {
+          Serial.println("Connection Established");
+          when_connect = false;
+        }
+        else {
+          Serial.println("Failed to establish connection");
+        }
       }
-      else {
-        Serial.println("Failed to publish ECG1!");
-        cmml_data = "";
+
+      if(!when_connect) {
+        if(client.publish(MQTT_TOPIC, cmml_data.c_str())) {
+          Serial.println("Published!");
+          cmml_data = "";
+        }
+        else {
+          Serial.println("Failed to publish ECG1!");
+          cmml_data = "";
+        }
       }
     }
 
@@ -207,13 +241,25 @@ void data_transmit_task(void* pvParameters) {
       ecg2_ts     = "";
       xSemaphoreGive(ecg2_mutex);
       
-      if(client.publish(MQTT_TOPIC, cmml_data.c_str())) {
-        Serial.println("Published!");
-        cmml_data = "";
+      if(when_connect) {
+        if(client.publish(MQTT_TOPIC1, unix_ts)) {
+          Serial.println("Connection Established");
+          when_connect = false;
+        }
+        else {
+          Serial.println("Failed to establish connection");
+        }
       }
-      else {
-        Serial.println("Failed to publish ECG2!");
-        cmml_data = "";
+
+      if(!when_connect) {
+        if(client.publish(MQTT_TOPIC, cmml_data.c_str())) {
+          Serial.println("Published!");
+          cmml_data = "";
+        }
+        else {
+          Serial.println("Failed to publish ECG2!");
+          cmml_data = "";
+        }
       }
     }
 
