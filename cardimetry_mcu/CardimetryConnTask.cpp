@@ -10,10 +10,15 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
             out_req           = 0;
   bool      stamp_timer_free  = true;
   uint64_t  stamp_timer;
-  float     battery_read  = 0.,
-            battery_perc  = 0.,
+  float     battery_read  = (float)analogRead(CARDIMETRY_CONN_BAT_PIN),
+            battery_perc  = (battery_read - CARDIMETRY_CONN_BAT_LOW)*100./(CARDIMETRY_CONN_BAT_FULL - CARDIMETRY_CONN_BAT_LOW),
             battery_perc_temp;
   struct tm timeinfo;
+
+
+  /* Battery init */
+  if(battery_perc > 100.) battery_perc = 100.;
+  else if(battery_perc < 0.) battery_perc = 0.;
 
 
   /* Initiate WiFi */
@@ -33,6 +38,7 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
       case CARDIMETRY_CONN_REQ_NONE:
         break;
 
+
       case CARDIMETRY_CONN_REQ_WIFI_SCAN:
         task_state = CARDIMETRY_CONN_WIFI_SCAN;
         /* Reset number of scanned WiFi */
@@ -40,6 +46,7 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
         cardimetry::cardimetry_conn_wifi_scanned_num = CARDIMETRY_CONN_WIFI_SCAN_UNDONE;
         xSemaphoreGive(cardimetry::cardimetry_wifi_mutex);
         break;
+
 
       case CARDIMETRY_CONN_REQ_WIFI_CONNECT:
         task_state = CARDIMETRY_CONN_WIFI_CONNECT;
@@ -59,20 +66,32 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
         battery_read      = (CARDIMETRY_CONN_BAT_COMPFILT)*((float)analogRead(CARDIMETRY_CONN_BAT_PIN)) + (1.0 - CARDIMETRY_CONN_BAT_COMPFILT)*battery_read;
         battery_perc_temp = (battery_read - CARDIMETRY_CONN_BAT_LOW)*100./(CARDIMETRY_CONN_BAT_FULL - CARDIMETRY_CONN_BAT_LOW);
         battery_perc      = (fabs(battery_perc_temp - battery_perc) < CARDIMETRY_CONN_BAT_TOLERANCE) ? battery_perc : round(battery_perc_temp);
-        xSemaphoreTake(cardimetry::cardimetry_bat_mutex, portMAX_DELAY);
-        cardimetry::cardimetry_conn_bat_perc = (uint16_t)((int)battery_perc);
-        xSemaphoreGive(cardimetry::cardimetry_bat_mutex);
+        if(battery_perc > 100.) battery_perc = 100.;
+        else if(battery_perc < 0.) battery_perc = 0.;
+
+        xSemaphoreTake(cardimetry::cardimetry_info_mutex, portMAX_DELAY);
+        cardimetry::cardimetry_conn_bat_perc = (int16_t)battery_perc;
+
+        /* Receive wifi signal strength */
+        if(WiFi.status() == WL_CONNECTION_LOST || WiFi.status() == WL_DISCONNECTED) {
+          cardimetry::cardimetry_conn_signal = -9999;
+          WiFi.disconnect();
+        }
+        else {
+          cardimetry::cardimetry_conn_signal = (int16_t)WiFi.RSSI();
+        }
 
         /* Get time from NTP */
-        if(getLocalTime(&timeinfo, 500)){
-          xSemaphoreTake(cardimetry::cardimetry_time_mutex, portMAX_DELAY);
-          cardimetry::cardimetry_conn_time_m  = timeinfo.tm_min;
-          cardimetry::cardimetry_conn_time_h  = timeinfo.tm_hour;
-          cardimetry::cardimetry_conn_time_d  = timeinfo.tm_mday;
-          cardimetry::cardimetry_conn_time_mn = timeinfo.tm_mon;
-          cardimetry::cardimetry_conn_time_y  = timeinfo.tm_year;
-          xSemaphoreGive(cardimetry::cardimetry_time_mutex);
+        if(getLocalTime(&timeinfo, 500)) {
+          cardimetry::cardimetry_conn_time_sec  = timeinfo.tm_sec;
+          cardimetry::cardimetry_conn_time_mnt  = timeinfo.tm_min;
+          cardimetry::cardimetry_conn_time_hr   = timeinfo.tm_hour;
+          cardimetry::cardimetry_conn_time_wd   = timeinfo.tm_wday;
+          cardimetry::cardimetry_conn_time_md   = timeinfo.tm_wday;
+          cardimetry::cardimetry_conn_time_mth  = timeinfo.tm_mon;
+          cardimetry::cardimetry_conn_time_yr   = timeinfo.tm_year;
         }
+        xSemaphoreGive(cardimetry::cardimetry_info_mutex);
         break;
 
 
@@ -176,6 +195,9 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
             cardimetry::cardimetry_conn_wifi_selected_pass
           );
           xSemaphoreGive(cardimetry::cardimetry_sd_mutex);
+
+          /* Save SSID */
+          cardimetry::cardimetry_conn_wifi_connected_ssid = cardimetry::cardimetry_conn_wifi_scanned_ssid[cardimetry::cardimetry_conn_wifi_selected];
 
           /* Notify success */
           out_req = CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_SUCCESS;
