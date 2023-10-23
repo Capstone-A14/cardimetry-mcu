@@ -3,7 +3,8 @@
 // #include "download_test.h"
 // #include "transmit_test.h"
 // #include "time_test.h"
-#include "png_test.h"
+// #include "png_test.h"
+#include "imu_test.h"
 
 void setup() {
   
@@ -32,6 +33,10 @@ void setup() {
   #ifdef __PNG_TEST_H__
     png_begin();
   #endif
+
+  #ifdef __IMU_TEST_H__
+    imu_begin();
+  #endif
 }
 
 void loop() {
@@ -58,5 +63,9 @@ void loop() {
 
   #ifdef __PNG_TEST_H__
     png_loop();
+  #endif
+
+  #ifdef __IMU_TEST_H__
+    imu_loop();
   #endif
 }
