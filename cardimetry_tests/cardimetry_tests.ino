@@ -4,7 +4,11 @@
 // #include "transmit_test.h"
 // #include "time_test.h"
 // #include "png_test.h"
-#include "imu_test.h"
+
+// #define __MPU6050__
+// #include "imu_test.h"
+
+#include "ecg_test.h"
 
 void setup() {
   
@@ -37,6 +41,10 @@ void setup() {
   #ifdef __IMU_TEST_H__
     imu_begin();
   #endif
+
+  #ifdef __ECG_TEST_H__
+    ecg_begin();
+  #endif
 }
 
 void loop() {
@@ -67,5 +75,9 @@ void loop() {
 
   #ifdef __IMU_TEST_H__
     imu_loop();
+  #endif
+
+  #ifdef __ECG_TEST_H__
+    ecg_loop();
   #endif
 }
