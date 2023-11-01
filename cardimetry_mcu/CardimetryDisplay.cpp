@@ -49,29 +49,35 @@ void cardimetry::CardimetryDisplay::getTouch() {
 
 
 
-void cardimetry::CardimetryDisplay::sleepCount() {
+void cardimetry::CardimetryDisplay::sleepCount(bool sleep_able) {
   static uint64_t  last_touch_ms;
   static bool      is_sleep = false,
                    is_init  = true;
 
-  if(is_init) {
-    last_touch_ms = millis();
-    is_init = false;
-  }
-  if(this->is_touched) {
-    last_touch_ms = millis();
-    if(is_sleep) {
-      digitalWrite(CARDIMETRY_DISPLAY_TFT_LED, HIGH);
-      is_sleep = false;
+  if(sleep_able) {
+    if(is_init) {
+      last_touch_ms = millis();
+      is_init = false;
     }
-  }
-  else {
-    if(millis() - last_touch_ms >= CARDIMETRY_DISPLAY_SLEEP_MS) {
-      if(!is_sleep) {
-        digitalWrite(CARDIMETRY_DISPLAY_TFT_LED, LOW);
-        is_sleep = true;
+    if(this->is_touched) {
+      last_touch_ms = millis();
+      if(is_sleep) {
+        digitalWrite(CARDIMETRY_DISPLAY_TFT_LED, HIGH);
+        is_sleep = false;
       }
     }
+    else {
+      if(millis() - last_touch_ms >= CARDIMETRY_DISPLAY_SLEEP_MS) {
+        if(!is_sleep) {
+          digitalWrite(CARDIMETRY_DISPLAY_TFT_LED, LOW);
+          is_sleep = true;
+        }
+      }
+    }
+  }
+
+  else {
+    is_init = true;
   }
 }
 
@@ -129,6 +135,7 @@ bool cardimetry::CardimetryDisplay::configFileExist(fs::FS &fs) {
 
 
 bool cardimetry::CardimetryDisplay::createConfigFile(fs::FS &fs, String uid) {
+  if(fs.exists(F("/cmconfig.json"))) fs.remove(F("/cmconfig.json"));
   File cmconfig = fs.open(F("/cmconfig.json"), FILE_WRITE);
 
   if(cmconfig) {
@@ -159,6 +166,7 @@ void cardimetry::CardimetryDisplay::drawWiFiList(int16_t num, String ssid[], int
 
   /* Reset */
   this->wifi_selected = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
+
 
   /* Draw column header */
   this->tft.fillRect(10, 50, 460, 38, 0x0000);
@@ -200,7 +208,8 @@ void cardimetry::CardimetryDisplay::drawWiFiList(int16_t num, String ssid[], int
     this->tft.drawCentreString(enc[i], 420, 97 + 31*i, 1);
   }
 
-  /* Draw outer rectangle*/
+
+  /* Draw outer rectangle */
   this->tft.drawRect(10, 50, 460, 256, 0x0000);
 }
 
@@ -316,6 +325,59 @@ bool cardimetry::CardimetryDisplay::isWiFiTableExist(fs::FS &fs, String* buf, St
     return false;
   }
 } 
+
+
+
+
+void cardimetry::CardimetryDisplay::drawPatientList(uint16_t id[], String name[], uint8_t offset) {
+  
+  /* Reset */
+  this->patient_selected = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
+
+
+  /* Draw column header */
+  this->tft.fillRect(10, 50, 460, 38, 0x0000);
+  this->tft.setTextColor(0xFFFF, 0x0000);
+  this->tft.setTextSize(2);
+  this->tft.drawCentreString(F("Patient ID"), 50, 60, 1);
+  this->tft.drawCentreString(F("Patient Name"), 300, 60, 1);
+
+
+  /* Draw table entries */
+  for(uint8_t i = offset; i < offset + 7; ++i) {
+
+    /* Draw a rectangle */
+    this->tft.drawRect(10, 88 + 31*i, 460, 31, 0x7BCF);
+
+    /* Show number */
+    this->tft.setTextColor(0x0000, 0xFFFF);
+    this->tft.drawCentreString(String(id[i]), 50, 97 + 31*i, 1);
+    
+    /* Show name */
+    if(name[i].length() > 28)
+      this->tft.drawCentreString(name[i].substring(0, 25) + String("..."), 300, 97 + 31*i, 1);
+    else
+      this->tft.drawCentreString(name[i], 300, 97 + 31*i, 1);
+  }
+
+
+  /* Draw outer rectangle */
+  this->tft.drawRect(10, 50, 460, 256, 0x0000);
+}
+
+
+
+
+void cardimetry::CardimetryDisplay::actionPatientList(uint16_t id[], String name[], uint8_t offset) {
+
+}
+
+
+
+
+uint8_t cardimetry::CardimetryDisplay::getSelectedPatient() {
+
+}
 
 
 
@@ -716,14 +778,17 @@ void cardimetry::CardimetryDisplay::drawInfoBar(uint16_t time_hr, uint16_t time_
 uint8_t cardimetry::CardimetryDisplay::actionMainMenu() {
 
   /* Check for input */
-  if(80 <= this->touch_y && this->touch_y <= 280) {
-    
-    if(40 <= this->touch_x && this->touch_x <= 220) {
-      return CARDIMETRY_DISPLAY_MAIN_MENU_ACTION_START;
-    }
+  if(this->is_touched) {
 
-    else if(260 <= this->touch_x && this->touch_x <= 440) {
-      return CARDIMETRY_DISPLAY_MAIN_MENU_ACTION_SETTINGS;
+    if(80 <= this->touch_y && this->touch_y <= 280) {
+      
+      if(40 <= this->touch_x && this->touch_x <= 220) {
+        return CARDIMETRY_DISPLAY_MAIN_MENU_ACTION_START;
+      }
+
+      else if(260 <= this->touch_x && this->touch_x <= 440) {
+        return CARDIMETRY_DISPLAY_MAIN_MENU_ACTION_SETTINGS;
+      }
     }
   }
 
@@ -735,6 +800,24 @@ uint8_t cardimetry::CardimetryDisplay::actionMainMenu() {
 
 void cardimetry::CardimetryDisplay::drawSettings() {
 
+  /* Draw the button boxes */
+  this->tft.fillSmoothRoundRect(200, 80, 240, 60, 15, 0x19AA, 0xFFFF);
+  this->tft.fillSmoothRoundRect(200, 150, 240, 60, 15, 0x19AA, 0xFFFF);
+  this->tft.fillSmoothRoundRect(200, 220, 240, 60, 15, 0x19AA, 0xFFFF);
+  this->tft.fillSmoothRoundRect(40, 150, 120, 60, 15, 0x0000, 0xFFFF);
+
+  /* Print text */
+  this->tft.setTextColor(0xFFFF, 0x018C);
+  this->tft.loadFont(this->fontFile(CARDIMETRY_DISPLAY_FONT_REGULAR, 22, false), SD);
+  this->tft.setCursor(225, 101);
+  this->tft.print(F("Connect to WiFi"));
+  this->tft.setCursor(225, 171);
+  this->tft.print(F("Change UID"));
+  this->tft.setCursor(225, 241);
+  this->tft.print(F("Restart Device"));
+  this->tft.setCursor(57, 171);
+  this->tft.print(F("< Back"));
+  this->tft.unloadFont();
 }
 
 
@@ -742,6 +825,344 @@ void cardimetry::CardimetryDisplay::drawSettings() {
 
 uint8_t cardimetry::CardimetryDisplay::actionSettings() {
   
+  /* Check for touch region */
+  if(this->is_touched) {
+
+    if(40 <= this->touch_x && this->touch_x <= 160) {
+
+      if(150 <= this->touch_y && this->touch_x <= 210) {
+        return CARDIMETRY_DISPLAY_SETTINGS_ACTION_BACK;
+      }
+    }
+
+    else if(200 <= this->touch_x && this->touch_x <= 440) {
+
+      if(80 <= this->touch_y && this->touch_y <= 140) {
+        return CARDIMETRY_DISPLAY_SETTINGS_ACTION_WIFI_CONNECT;
+      }
+
+      else if(150 <= this->touch_y && this->touch_y <= 210) {
+        return CARDIMETRY_DISPLAY_SETTINGS_ACTION_CHANGE_UID;
+      }
+
+      else if(220 <= this->touch_y && this->touch_y <= 280) {
+        return CARDIMETRY_DISPLAY_SETTINGS_ACTION_RESTART;
+      }
+    }
+  }
+
+  return CARDIMETRY_DISPLAY_SETTINGS_ACTION_YET;
+}
+
+
+
+
+void cardimetry::CardimetryDisplay::drawStart() {
+
+  /* Draw the button boxes */
+  this->tft.fillSmoothRoundRect(200, 80, 240, 60, 15, 0x19AA, 0xFFFF);
+  this->tft.fillSmoothRoundRect(200, 150, 240, 60, 15, 0x19AA, 0xFFFF);
+  this->tft.fillSmoothRoundRect(200, 220, 240, 60, 15, 0x19AA, 0xFFFF);
+  this->tft.fillSmoothRoundRect(40, 150, 120, 60, 15, 0x0000, 0xFFFF);
+
+  /* Print text */
+  this->tft.setTextColor(0xFFFF, 0x018C);
+  this->tft.loadFont(this->fontFile(CARDIMETRY_DISPLAY_FONT_REGULAR, 22, false), SD);
+  this->tft.setCursor(225, 101);
+  this->tft.print(F("Start Publish"));
+  this->tft.setCursor(225, 171);
+  this->tft.print(F("ECG Test"));
+  this->tft.setCursor(225, 241);
+  this->tft.print(F("IMU Test"));
+  this->tft.setCursor(57, 171);
+  this->tft.print(F("< Back"));
+  this->tft.unloadFont();
+}
+
+
+
+
+uint8_t cardimetry::CardimetryDisplay::actionStart() {
+
+  /* Check for touch region */
+  if(this->is_touched) {
+
+    if(40 <= this->touch_x && this->touch_x <= 160) {
+
+      if(150 <= this->touch_y && this->touch_x <= 210) {
+        return CARDIMETRY_DISPLAY_START_ACTION_BACK;
+      }
+    }
+
+    else if(200 <= this->touch_x && this->touch_x <= 440) {
+
+      if(80 <= this->touch_y && this->touch_y <= 140) {
+        return CARDIMETRY_DISPLAY_START_ACTION_START_PUBLISH;
+      }
+
+      else if(150 <= this->touch_y && this->touch_y <= 210) {
+        return CARDIMETRY_DISPLAY_START_ACTION_ECG_TEST;
+      }
+
+      else if(220 <= this->touch_y && this->touch_y <= 280) {
+        return CARDIMETRY_DISPLAY_START_ACTION_IMU_TEST;
+      }
+    }
+  }
+
+  return CARDIMETRY_DISPLAY_START_ACTION_YET;
+}
+
+
+
+
+void cardimetry::CardimetryDisplay::drawEcgTest() {
+  
+  /* Reset */
+  this->init_ecg_test = true;
+
+  /* Back button */
+  this->tft.fillSmoothRoundRect(9, 9, 135, 35, 10, 0x0000, 0xFFFF);
+  this->tft.fillSmoothRoundRect(164, 9, 307, 35, 10, 0x19AA, 0xFFFF);
+  this->tft.setTextColor(0xFFFF, 0x0000);
+  this->tft.loadFont(this->fontFile(CARDIMETRY_DISPLAY_FONT_REGULAR, 20, false), SD);
+  this->tft.drawCentreString(F("< BACK"), 66, 19, 1);
+  this->tft.unloadFont();
+  this->tft.loadFont(this->fontFile(CARDIMETRY_DISPLAY_FONT_REGULAR, 16, false), SD);
+  this->tft.drawCentreString(F("ECG TEST PLOT (25 mm/s)"), 320, 20, 1);
+  this->tft.unloadFont();
+
+  /* Axis values */
+  this->tft.setTextColor(0x0000, 0xFFFF);
+  this->tft.loadFont(this->fontFile(CARDIMETRY_DISPLAY_FONT_REGULAR, 8, false), SD);
+
+  uint16_t axis_time_ms = 0;
+  for(uint16_t i = 10; i < 470; i += 50) {
+    this->tft.drawCentreString(String(axis_time_ms), i, 312, 1);
+    axis_time_ms += 200;
+  }
+
+  this->tft.unloadFont();
+
+  /* Draw the plot */
+  this->drawEcgPlot();
+}
+
+
+
+
+void cardimetry::CardimetryDisplay::ecgPlot(uint64_t* timestamp, int32_t* lead1, int32_t* lead2, int32_t* lead3) {
+
+  /* Variables holding coordinates */
+  static uint64_t zero_ts;
+  static uint16_t current_x, last_x,
+                  current_y1, last_y1,
+                  current_y2, last_y2,
+                  current_y3, last_y3;
+
+  /* Initiate */
+  if(this->init_ecg_test) {
+
+    zero_ts = timestamp[0];
+    
+    last_x  = this->convertEcgTs2Plot(0);
+
+    last_y1 = this->convertEcgLead2Plot(lead1[0]);
+    last_y2 = this->convertEcgLead2Plot(lead2[0]);
+    last_y3 = this->convertEcgLead2Plot(lead3[0]);
+  }
+
+  for(uint8_t i = 0; i < 50; ++i) {
+
+    /* If init, forget the zero */
+    if(this->init_ecg_test) {
+      this->init_ecg_test = false;
+      continue;
+    }
+
+    /* Determine current value*/
+    current_x   = this->convertEcgTs2Plot(timestamp[i] - zero_ts);
+    current_y1  = this->convertEcgLead2Plot(lead1[i]);
+    current_y2  = this->convertEcgLead2Plot(lead2[i]);
+    current_y3  = this->convertEcgLead2Plot(lead3[i]);
+
+    /* If overflow */
+    if(current_x > 470) {
+      if(i > 0) --i;
+      zero_ts = timestamp[i];
+      last_x  = this->convertEcgTs2Plot(0);
+      this->drawEcgPlot();
+      continue;
+    }
+
+    /* Draw */
+    this->tft.drawLine(
+      last_x, last_y1,
+      current_x, current_y1,
+      0xE000
+    );
+    this->tft.drawLine(
+      last_x, last_y2,
+      current_x, current_y2,
+      0x0543
+    );
+    this->tft.drawLine(
+      last_x, last_y3,
+      current_x, current_y3,
+      0x5015
+    );
+
+    /* Switch */
+    last_x  = current_x;
+    last_y1 = current_y1;
+    last_y2 = current_y2;
+    last_y3 = current_y3;
+  }
+}
+
+
+
+
+uint8_t cardimetry::CardimetryDisplay::actionEcgTest() {
+  
+  if(this->is_touched) {
+
+    if((9 <= this->touch_x && this->touch_x <= 144) && (9 <= this->touch_y && this->touch_y <= 44)) {
+      return CARDIMETRY_DISPLAY_ECG_TEST_ACTION_BACK;
+    }  
+  }
+
+  return CARDIMETRY_DISPLAY_ECG_TEST_ACTION_YET;
+}
+
+
+
+
+void cardimetry::CardimetryDisplay::drawImuTest() {
+  /* Reset */
+  this->init_imu_test = true;
+
+  /* Back button */
+  this->tft.fillSmoothRoundRect(9, 9, 135, 35, 10, 0x0000, 0xFFFF);
+  this->tft.fillSmoothRoundRect(164, 9, 307, 35, 10, 0x19AA, 0xFFFF);
+  this->tft.setTextColor(0xFFFF, 0x0000);
+  this->tft.loadFont(this->fontFile(CARDIMETRY_DISPLAY_FONT_REGULAR, 20, false), SD);
+  this->tft.drawCentreString(F("< BACK"), 66, 19, 1);
+  this->tft.unloadFont();
+  this->tft.loadFont(this->fontFile(CARDIMETRY_DISPLAY_FONT_REGULAR, 16, false), SD);
+  this->tft.drawCentreString(F("IMU TEST PLOT"), 320, 20, 1);
+  this->tft.unloadFont();
+
+  /* Axis values */
+  this->tft.setTextColor(0x0000, 0xFFFF);
+  this->tft.loadFont(this->fontFile(CARDIMETRY_DISPLAY_FONT_REGULAR, 8, false), SD);
+
+  uint16_t axis_time_ms = 0;
+  for(uint16_t i = 10; i < 470; i += 50) {
+    this->tft.drawCentreString(String(axis_time_ms), i, 312, 1);
+    axis_time_ms += 200;
+  }
+
+  this->tft.unloadFont();
+
+  /* Draw the plot */
+  this->drawImuPlot();
+}
+
+
+
+
+void cardimetry::CardimetryDisplay::imuPlot(uint64_t* timestamp, float* qw, float* qx, float* qy, float* qz) {
+  
+  /* Variables holding coordinates */
+  static uint64_t zero_ts;
+  static uint16_t current_x, last_x,
+                  current_y1, last_y1,
+                  current_y2, last_y2,
+                  current_y3, last_y3,
+                  current_y4, last_y4;
+
+  /* Initiate */
+  if(this->init_imu_test) {
+
+    zero_ts = timestamp[0];
+    
+    last_x  = this->convertImuTs2Plot(0);
+
+    last_y1 = this->convertImuData2Plot(qw[0]);
+    last_y2 = this->convertImuData2Plot(qx[0]);
+    last_y3 = this->convertImuData2Plot(qy[0]);
+    last_y4 = this->convertImuData2Plot(qz[0]);
+  }
+
+  for(uint8_t i = 0; i < 25; ++i) {
+
+    /* If init, forget the zero */
+    if(this->init_imu_test) {
+      this->init_imu_test = false;
+      continue;
+    }
+
+    /* Determine current value */
+    current_x   = this->convertImuTs2Plot(timestamp[i] - zero_ts);
+    current_y1  = this->convertImuData2Plot(qw[i]);
+    current_y2  = this->convertImuData2Plot(qx[i]);
+    current_y3  = this->convertImuData2Plot(qy[i]);
+    current_y4  = this->convertImuData2Plot(qz[i]);
+
+    /* If overflow */
+    if(current_x > 470) {
+      if(i > 0) --i;
+      zero_ts = timestamp[i];
+      last_x  = this->convertImuTs2Plot(0);
+      this->drawImuPlot();
+      continue;
+    }
+
+    /* Draw */
+    this->tft.drawLine(
+      last_x, last_y1,
+      current_x, current_y1,
+      0xF800
+    );
+    this->tft.drawLine(
+      last_x, last_y2,
+      current_x, current_y2,
+      0xE540
+    );
+    this->tft.drawLine(
+      last_x, last_y3,
+      current_x, current_y3,
+      0x06A3
+    );
+    this->tft.drawLine(
+      last_x, last_y4,
+      current_x, current_y4,
+      0x201C
+    );
+
+    /* Switch */
+    last_x  = current_x;
+    last_y1 = current_y1;
+    last_y2 = current_y2;
+    last_y3 = current_y3;
+    last_y4 = current_y4;
+  }
+}
+
+
+
+
+uint8_t cardimetry::CardimetryDisplay::actionImuTest() {
+
+  if(this->is_touched) {
+
+    if((9 <= this->touch_x && this->touch_x <= 144) && (9 <= this->touch_y && this->touch_y <= 44)) {
+      return CARDIMETRY_DISPLAY_IMU_TEST_ACTION_BACK;
+    }  
+  }
+
+  return CARDIMETRY_DISPLAY_IMU_TEST_ACTION_YET;
 }
 
 
@@ -848,6 +1269,131 @@ void cardimetry::CardimetryDisplay::drawKeyboard(uint8_t mode) {
     this->tft.drawCentreString("<", 443, 237, 1);
     this->tft.drawCentreString("->", 443, 287, 1);
   }
+}
+
+
+
+
+void cardimetry::CardimetryDisplay::drawEcgPlot() {
+
+  /* Draw axis */
+  this->tft.fillRect(10, 60, 460, 250, 0xFFFF);
+  this->tft.drawRect(9, 59, 462, 252, 0xFEDB);
+  this->tft.drawRect(10, 60, 460, 250, 0xFEDB);
+  this->tft.drawRect(11, 61, 458, 248, 0xFEDB);
+  
+  uint8_t bold_cnt = 0;
+  for(uint16_t i = 20; i < 470; i += 10) {
+    
+    /* Bold for every 5 */
+    bold_cnt = (bold_cnt + 1)%5;
+    if(bold_cnt == 0) {
+      this->tft.drawFastVLine(i - 1, 60, 250, 0xFEDB);
+      this->tft.drawFastVLine(i, 60, 250, 0xFEDB);
+      this->tft.drawFastVLine(i + 1, 60, 250, 0xFEDB);
+    }
+    else {
+      this->tft.drawFastVLine(i, 60, 250, 0xFEDB);
+    }
+  }
+
+  bold_cnt = 0;
+  for(uint16_t i = 300; i > 60; i -= 10) {
+    
+    /* Bold for every 5 */
+    bold_cnt = (bold_cnt + 1)%5;
+    if(bold_cnt == 0) {
+      this->tft.drawFastHLine(10, i - 1, 460, 0xFEDB);
+      this->tft.drawFastHLine(10, i, 460, 0xFEDB);
+      this->tft.drawFastHLine(10, i + 1, 460, 0xFEDB);
+    }
+    else {
+      this->tft.drawFastHLine(10, i, 460, 0xFEDB);
+    }
+  }
+}
+
+
+
+
+void cardimetry::CardimetryDisplay::drawImuPlot() {
+  /* Draw axis */
+  this->tft.fillRect(10, 60, 460, 250, 0xFFFF);
+  this->tft.drawRect(9, 59, 462, 252, 0xC618);
+  this->tft.drawRect(10, 60, 460, 250, 0xC618);
+  this->tft.drawRect(11, 61, 458, 248, 0xC618);
+  
+  uint8_t bold_cnt = 0;
+  for(uint16_t i = 20; i < 470; i += 10) {
+    
+    /* Bold for every 5 */
+    bold_cnt = (bold_cnt + 1)%5;
+    if(bold_cnt == 0) {
+      this->tft.drawFastVLine(i - 1, 60, 250, 0xC618);
+      this->tft.drawFastVLine(i, 60, 250, 0xC618);
+      this->tft.drawFastVLine(i + 1, 60, 250, 0xC618);
+    }
+    else {
+      this->tft.drawFastVLine(i, 60, 250, 0xC618);
+    }
+  }
+
+  bold_cnt = 0;
+  for(uint16_t i = 300; i > 60; i -= 10) {
+    
+    /* Bold for every 5 */
+    bold_cnt = (bold_cnt + 1)%5;
+    if(bold_cnt == 0) {
+      this->tft.drawFastHLine(10, i - 1, 460, 0xC618);
+      this->tft.drawFastHLine(10, i, 460, 0xC618);
+      this->tft.drawFastHLine(10, i + 1, 460, 0xC618);
+    }
+    else {
+      this->tft.drawFastHLine(10, i, 460, 0xC618);
+    }
+  }
+}
+
+
+
+
+uint16_t cardimetry::CardimetryDisplay::convertEcgTs2Plot(uint64_t time) {
+  return 10 + ((uint16_t)time)/4;
+}
+
+
+
+
+uint16_t cardimetry::CardimetryDisplay::convertEcgLead2Plot(int32_t lead) {
+  int32_t res = lead/10;
+  if(res < 0) {
+    res = 0;
+  }
+  else if (res > 250) {
+    res = 250;
+  }
+  return 310 - (uint16_t)res;
+}
+
+
+
+
+uint16_t cardimetry::CardimetryDisplay::convertImuTs2Plot(uint64_t time) {
+  return 10 + ((uint16_t)time)/4;
+}
+
+
+
+
+uint16_t cardimetry::CardimetryDisplay::convertImuData2Plot(float q) {
+  float res = q*250;
+  if(res < 0) {
+    res = 0;
+  }
+  else if (res > 250) {
+    res = 250;
+  }
+  return 310 - (uint16_t)res;
 }
 
 

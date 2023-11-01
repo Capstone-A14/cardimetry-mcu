@@ -61,7 +61,7 @@ void cardimetry::CardimetryConn::saveConnWiFiTable(fs::FS &fs, String ssid, Stri
     cmwifitable.close();
 
     /* Recreate the json document */
-    DynamicJsonDocument json_doc(1024);
+    DynamicJsonDocument json_doc(2048);
     deserializeJson(json_doc, json_data);
     json_doc[ssid] = pass;
 
@@ -74,4 +74,41 @@ void cardimetry::CardimetryConn::saveConnWiFiTable(fs::FS &fs, String ssid, Stri
     new_cmwifitable.println(new_json_data);
     new_cmwifitable.close();
   }
+}
+
+
+
+
+bool cardimetry::CardimetryConn::getPatientData(uint16_t id_buf[], String name_buf[], String key) {
+  
+  /* Start HTTP client */
+  HTTPClient http;
+  http.begin(
+    String(CARDIMETRY_CONN_BASE_SERVICE_URL) + String(CARDIMETRY_CONN_API_PATIENT_SEARCH) + key
+  );
+
+  /* GET */
+  int http_code = http.GET();
+  
+  if(http_code == HTTP_CODE_OK) {
+    
+    /* Get the data and parse the json */
+    String payload = http.getString();
+    DynamicJsonDocument json_doc(4096);
+    deserializeJson(json_doc, payload);
+    for(uint8_t i = 0; i < (uint8_t)min((int)CARDIMETRY_CONN_MAX_PATIENT_SEARCH, (int)json_doc.size()); ++i) {
+      id_buf[i]   = (uint8_t)json_doc[i]["patient_id"].as<int>();
+      name_buf[i] = json_doc[i]["name"].as<String>();
+    }
+
+    /* Close and return true */
+    http.end();
+    return true;
+  }
+
+  else {
+    return false;
+  }
+
+  return false;
 }

@@ -41,6 +41,8 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
 
       case CARDIMETRY_CONN_REQ_WIFI_SCAN:
         task_state = CARDIMETRY_CONN_WIFI_SCAN;
+        WiFi.disconnect();
+        
         /* Reset number of scanned WiFi */
         xSemaphoreTake(cardimetry::cardimetry_wifi_mutex, portMAX_DELAY);
         cardimetry::cardimetry_conn_wifi_scanned_num = CARDIMETRY_CONN_WIFI_SCAN_UNDONE;
@@ -50,6 +52,11 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
 
       case CARDIMETRY_CONN_REQ_WIFI_CONNECT:
         task_state = CARDIMETRY_CONN_WIFI_CONNECT;
+        break;
+    
+    
+      case CARDIMETRY_CONN_REQ_PATIENT_SEARCH:
+        task_state = CARDIMETRY_CONN_PATIENT_SEARCH;
         break;
     }
     task_req = CARDIMETRY_CONN_REQ_NONE;
@@ -181,7 +188,6 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
             /* Notify failed */
             out_req = CARDIMETRY_DISPLAY_REQ_WIFI_CONNECT_FAILED;
             xQueueSend(cardimetry::cardimetry_display_req_queue, &out_req, portMAX_DELAY);
-            WiFi.disconnect();
             task_state = CARDIMETRY_CONN_IDLE;
             stamp_timer_free = true;
           }
@@ -207,6 +213,31 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
         }
 
         xSemaphoreGive(cardimetry::cardimetry_wifi_mutex);
+        break;
+
+
+
+
+      case CARDIMETRY_CONN_PATIENT_SEARCH:
+
+        /* Get patient data */
+        if(cm_conn.getPatientData(
+        cardimetry::cardimetry_conn_patient_search_id,
+        cardimetry::cardimetry_conn_patient_search_name,
+        cardimetry::cardimetry_conn_patient_search_key)) {
+
+          /* Send request to display patient list */
+          out_req = CARDIMETRY_DISPLAY_REQ_PATIENT_SEARCH_SUCCESS;
+          xQueueSend(cardimetry::cardimetry_display_req_queue, &out_req, portMAX_DELAY);
+        }
+
+        else {
+          out_req = CARDIMETRY_DISPLAY_REQ_PATIENT_SEARCH_FAILED;
+          xQueueSend(cardimetry::cardimetry_display_req_queue, &out_req, portMAX_DELAY);
+        }
+
+        /* Reset to idle */
+        task_state = CARDIMETRY_CONN_IDLE;
         break;
     }
 
