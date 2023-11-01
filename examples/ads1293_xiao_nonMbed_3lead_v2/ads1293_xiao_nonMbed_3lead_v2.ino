@@ -1,8 +1,8 @@
 #include "protocentral_ads1293.h"
 #include <SPI.h>
 
-#define DRDY_PIN                17
-#define CS_PIN                  5
+#define DRDY_PIN                35
+#define CS_PIN                  32
 
 ads1293 ADS1293(DRDY_PIN, CS_PIN);
 
@@ -12,7 +12,7 @@ void setup() {
 
   Serial.begin(115200);
  // initalize the  data ready and chip select pins:
-  //pinMode(DRDY_PIN, INPUT);
+  // pinMode(DRDY_PIN, INPUT);
   pinMode(CS_PIN, OUTPUT);  
   SPI.begin();
 
