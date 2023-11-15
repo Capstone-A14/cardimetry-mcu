@@ -6,7 +6,7 @@
 #include "CardimetrySensor.h"
 
 #define CARDIMETRY_DISPLAY_TASK_STACK_SIZE  7200
-#define CARDIMETRY_CONN_TASK_STACK_SIZE     8192
+#define CARDIMETRY_CONN_TASK_STACK_SIZE     12800
 #define CARDIMETRY_SENSOR_TASK_STACK_SIZE   12800
 #define CARDIMETRY_UART_TASK_STACK_SIZE     2048
 
@@ -50,6 +50,10 @@
 #define CARDIMETRY_DISPLAY_REQ_PATIENT_SEARCH_FAILED  12
 #define CARDIMETRY_DISPLAY_REQ_ECG_SYNC_SUCCESS       13
 #define CARDIMETRY_DISPLAY_REQ_ECG_SYNC_FAILED        14
+#define CARDIMETRY_DISPLAY_REQ_LINK_DEVICE_SUCCESS    15
+#define CARDIMETRY_DISPLAY_REQ_LINK_DEVICE_FAILED     16
+#define CARDIMETRY_DISPLAY_REQ_LINK_PATIENT_SUCCESS   17
+#define CARDIMETRY_DISPLAY_REQ_LINK_PATIENT_FAILED    18
 
 #define CARDIMETRY_CONN_REQ_NONE            0
 #define CARDIMETRY_CONN_REQ_WIFI_SCAN       1
@@ -59,16 +63,21 @@
 #define CARDIMETRY_CONN_REQ_PUB_IMU1        5
 #define CARDIMETRY_CONN_REQ_PUB_IMU2        6
 #define CARDIMETRY_CONN_REQ_PATIENT_SEARCH  7
+#define CARDIMETRY_CONN_REQ_MQTT_PUBLISH    8
+#define CARDIMETRY_CONN_REQ_LINK_DEVICE     9
+#define CARDIMETRY_CONN_REQ_LINK_PATIENT    10
 
-#define CARDIMETRY_SENSOR_REQ_NONE      0
-#define CARDIMETRY_SENSOR_REQ_INIT      1
-#define CARDIMETRY_SENSOR_REQ_ECG_HALT  2
-#define CARDIMETRY_SENSOR_REQ_ECG_READ  3
-#define CARDIMETRY_SENSOR_REQ_IMU_HALT  4
-#define CARDIMETRY_SENSOR_REQ_IMU_READ  5
-#define CARDIMETRY_SENSOR_REQ_ECG_TEST  6
-#define CARDIMETRY_SENSOR_REQ_IMU_TEST  7
-#define CARDIMETRY_SENSOR_REQ_ECG_SYNC  8
+#define CARDIMETRY_SENSOR_REQ_NONE              0
+#define CARDIMETRY_SENSOR_REQ_INIT              1
+#define CARDIMETRY_SENSOR_REQ_ECG_HALT          2
+#define CARDIMETRY_SENSOR_REQ_ECG_READ          3
+#define CARDIMETRY_SENSOR_REQ_IMU_HALT          4
+#define CARDIMETRY_SENSOR_REQ_IMU_READ          5
+#define CARDIMETRY_SENSOR_REQ_ECG_TEST          6
+#define CARDIMETRY_SENSOR_REQ_IMU_TEST          7
+#define CARDIMETRY_SENSOR_REQ_ECG_SYNC          8
+#define CARDIMETRY_SENSOR_REQ_RUN_TRANSMISSION  9
+#define CARDIMETRY_SENSOR_REQ_STOP_TRANSMISSION 10
 
 #define CARDIMETRY_UART_REQ_NONE  0
 
@@ -110,7 +119,9 @@ namespace cardimetry {
                   cardimetry_conn_time_mth,
                   cardimetry_conn_time_yr;
 
-  extern uint16_t cardimetry_conn_patient_search_id[CARDIMETRY_CONN_MAX_PATIENT_SEARCH];
+  extern uint8_t  cardimetry_conn_patient_selected;
+  extern uint16_t cardimetry_conn_patient_search_id[CARDIMETRY_CONN_MAX_PATIENT_SEARCH],
+                  cardimetry_conn_patient_search_num;
   extern String   cardimetry_conn_patient_search_key,
                   cardimetry_conn_patient_search_name[CARDIMETRY_CONN_MAX_PATIENT_SEARCH];
 

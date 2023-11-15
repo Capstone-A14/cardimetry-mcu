@@ -36,7 +36,9 @@ uint16_t  cardimetry::cardimetry_conn_time_sec,
           cardimetry::cardimetry_conn_time_mth,
           cardimetry::cardimetry_conn_time_yr;
 
-uint16_t  cardimetry::cardimetry_conn_patient_search_id[CARDIMETRY_CONN_MAX_PATIENT_SEARCH];
+uint8_t   cardimetry::cardimetry_conn_patient_selected;
+uint16_t  cardimetry::cardimetry_conn_patient_search_id[CARDIMETRY_CONN_MAX_PATIENT_SEARCH],
+          cardimetry::cardimetry_conn_patient_search_num;
 String    cardimetry::cardimetry_conn_patient_search_key,
           cardimetry::cardimetry_conn_patient_search_name[CARDIMETRY_CONN_MAX_PATIENT_SEARCH];
 
