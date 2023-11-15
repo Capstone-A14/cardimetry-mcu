@@ -30,6 +30,7 @@
 
 #define CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH "/assets/cm_loadscreen.jpg"
 #define CARDIMETRY_DISPLAY_MAINMENU_BG_PATH   "/assets/cm_mainmenu.jpg"
+#define CARDIMETRY_DISPLAY_PUBLISH_BG_PATH    "/assets/cm_publishing.jpg"
 
 #define CARDIMETRY_DISPLAY_LOADSCREEN_SD_READ               0
 #define CARDIMETRY_DISPLAY_LOADSCREEN_SD_FAILED             1
@@ -53,16 +54,21 @@
 #define CARDIMETRY_DISPLAY_START                            19
 #define CARDIMETRY_DISPLAY_ECG_TEST                         20
 #define CARDIMETRY_DISPLAY_IMU_TEST                         21
-#define CARDIMETRY_DISPLAY_PATIENT_NAME_INPUT               22
-#define CARDIMETRY_DISPLAY_PATIENT_SEARCH                   23
-#define CARDIMETRY_DISPLAY_PATIENT_LIST                     24
-#define CARDIMETRY_DISPLAY_PATIENT_SEARCH_FAILED            25
+#define CARDIMETRY_DISPLAY_LINKING_DEVICE                   22
+#define CARDIMETRY_DISPLAY_PATIENT_NAME_INPUT               23
+#define CARDIMETRY_DISPLAY_PATIENT_SEARCH                   24
+#define CARDIMETRY_DISPLAY_PATIENT_LIST                     25
+#define CARDIMETRY_DISPLAY_PATIENT_SEARCH_FAILED            26
+#define CARDIMETRY_DISPLAY_LINKING_PATIENT                  27
+#define CARDIMETRY_DISPLAY_PATIENT_START_PUBLISH            28
 
 #define CARDIMETRY_DISPLAY_LOADSCREEN_WAIT_MS               300
 #define CARDIMETRY_DISPLAY_LOADSCREEN_KEYBOARD_WAIT_MS      500
 
 #define CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED    99
-#define CARDIMETRY_DISPLAY_PATIENT_NOT_SELECTED 69
+#define CARDIMETRY_DISPLAY_WIFI_SKIP            69
+#define CARDIMETRY_DISPLAY_PATIENT_NOT_SELECTED 99
+#define CARDIMETRY_DISPLAY_PATIENT_BACK         69
 
 #define CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW  0
 #define CARDIMETRY_DISPLAY_KEYBOARD_MODE_UP   1
@@ -128,14 +134,18 @@ namespace cardimetry{
         "{", "}", "\\", ":", ";", "!", "?"
       };
 
-      uint8_t wifi_selected     = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED,
-              patient_selected  = CARDIMETRY_DISPLAY_PATIENT_NOT_SELECTED,
-              keyboard_mode     = CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW,
-              last_mode         = CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW;
-      String  keyboard_buf  = "";
-      bool    init_info_bar = true,
-              init_ecg_test = true,
-              init_imu_test = true;
+      uint8_t   wifi_selected       = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED,
+                patient_selected    = CARDIMETRY_DISPLAY_PATIENT_NOT_SELECTED,
+                patient_offset      = 0,
+                keyboard_mode       = CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW,
+                last_mode           = CARDIMETRY_DISPLAY_KEYBOARD_MODE_LOW;
+      uint16_t  patient_bar_part  = 0,
+                patient_bar_h     = 0;
+      String    keyboard_buf      = "";
+      bool      init_info_bar     = true,
+                init_ecg_test     = true,
+                init_imu_test     = true,
+                init_patient_list = true;
 
       void drawKeyboard(uint8_t mode);
       void drawEcgPlot();
@@ -170,8 +180,9 @@ namespace cardimetry{
       uint8_t getSelectedWiFi();
       bool isWiFiTableExist(fs::FS &fs, String* buf, String ssid);
 
-      void drawPatientList(uint16_t id[], String name[], uint8_t offset);
-      void actionPatientList(uint16_t id[], String name[], uint8_t offset);
+      void initPatientList();
+      void drawPatientList(uint16_t num, uint16_t id[], String name[], uint8_t offset);
+      void actionPatientList(uint16_t num, uint16_t id[], String name[]);
       uint8_t getSelectedPatient();
 
       void showKeyboardInput();

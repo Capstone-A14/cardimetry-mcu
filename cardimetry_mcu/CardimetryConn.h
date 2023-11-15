@@ -7,6 +7,8 @@
 #include <WiFi.h>
 #include "time.h"
 #include "sntp.h"
+// #include "PubSubClient.h"
+#include "EspMQTTClient.h"
 #include "HTTPClient.h"
 #include "ArduinoJson.h"
 
@@ -14,15 +16,22 @@
 #define CARIDMETRY_CONN_NTP_SERVER_2        "time.nist.gov"
 #define CARDIMETRY_CONN_NTP_GMT_OFFSET_S    21600
 #define CARDIMETRY_CONN_NTP_DL_OFFSET_S     3600
-#define CARDIMETRY_CONN_BASE_SERVICE_URL    "http://192.168.100.176:8000"
+#define CARDIMETRY_CONN_BASE_SERVICE_IP     "192.168.1.42"
 #define CARDIMETRY_CONN_API_PATIENT_SEARCH  "/api/v1/patient/search?name="
+#define CARDIMETRY_CONN_API_LINK_DEVICE     "/api/v1/device/"
 #define CARDIMETRY_CONN_MQTT_PORT           1883
 #define CARDIMETRY_CONN_HTTP_PORT           80
+
+#define CARDIMETRY_CONN_MQTT_TOPIC_TIME     "/time/"
+#define CARDIMETRY_CONN_MQTT_TOPIC_ECG      "/ecg/"
+#define CARDIMETRY_CONN_MQTT_TOPIC_IMU      "/imu/"
+#define CARDIMETRY_CONN_MQTT_BUFFER_SIZE    5120
 
 #define CARDIMETRY_CONN_IDLE            0
 #define CARDIMETRY_CONN_WIFI_SCAN       1
 #define CARDIMETRY_CONN_WIFI_CONNECT    2
 #define CARDIMETRY_CONN_PATIENT_SEARCH  3
+#define CARDIMETRY_CONN_MQTT_PUBLISH    4
 
 #define CARDIMETRY_CONN_WIFI_SCAN_UNDONE  -69
 #define CARDIMETRY_CONN_WIFI_SCAN_MAX     7
@@ -48,14 +57,25 @@ namespace cardimetry{
   class CardimetryConn{
 
     public:
+      WiFiClient    wifi_client;
+      EspMQTTClient mqtt_client = EspMQTTClient(
+        CARDIMETRY_CONN_BASE_SERVICE_IP,
+        CARDIMETRY_CONN_MQTT_PORT
+      );
+      
       CardimetryConn();
       ~CardimetryConn();
       void begin();
       int16_t scanWiFi();
       void saveConnWiFiTable(fs::FS &fs, String ssid, String pass);
-      bool getPatientData(uint16_t id[], String name[], String key);
+      bool linkDevice();
+      bool linkPatient(uint16_t patient_id);
+      bool getPatientData(uint16_t* num, uint16_t id[], String name[], String key);
+      String getUID(fs::FS &fs);
   };
 }
+
+void onConnectionEstablished();
 
 
 #endif

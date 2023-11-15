@@ -18,7 +18,8 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
             imu2_plot         = false,
             stamp_timer_free  = true;
   uint64_t  stamp_timer;
-  uint8_t   selected_wifi_buf = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
+  uint8_t   selected_wifi_buf     = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED,
+            selected_patient_buf  = CARDIMETRY_DISPLAY_PATIENT_NOT_SELECTED;
   String    keyboard_buf;
 
 
@@ -119,6 +120,30 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
       case CARDIMETRY_DISPLAY_REQ_ECG_SYNC_FAILED:
         task_state      = CARDIMETRY_DISPLAY_LOADSCREEN_ECG_SYNC_FAILED;
+        screen_refresh  = true;
+        break;
+    
+    
+      case CARDIMETRY_DISPLAY_REQ_LINK_DEVICE_SUCCESS:
+        task_state      = CARDIMETRY_DISPLAY_PATIENT_NAME_INPUT;
+        screen_refresh  = true;
+        break;
+
+
+      case CARDIMETRY_DISPLAY_REQ_LINK_DEVICE_FAILED:
+        task_state      = CARDIMETRY_DISPLAY_MAIN_MENU;
+        screen_refresh  = true;
+        break;
+
+
+      case CARDIMETRY_DISPLAY_REQ_LINK_PATIENT_SUCCESS:
+        task_state      = CARDIMETRY_DISPLAY_PATIENT_START_PUBLISH;
+        screen_refresh  = true;
+        break;
+
+
+      case CARDIMETRY_DISPLAY_REQ_LINK_PATIENT_FAILED:
+        task_state      = CARDIMETRY_DISPLAY_MAIN_MENU;
         screen_refresh  = true;
         break;
     }
@@ -434,7 +459,13 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
         /* Establish a WiFi connection */
         selected_wifi_buf = cm_display.getSelectedWiFi();
-        if(selected_wifi_buf != CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED) {
+        
+        if(selected_wifi_buf == CARDIMETRY_DISPLAY_WIFI_SKIP) {
+          task_state      = (in_settings) ? CARDIMETRY_DISPLAY_MAIN_MENU : CARDIMETRY_DISPLAY_LOADSCREEN_SENSOR_INIT;
+          screen_refresh  = true;
+        }
+        
+        else if(selected_wifi_buf != CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED) {
 
           xSemaphoreTake(cardimetry::cardimetry_wifi_mutex, portMAX_DELAY);
           xSemaphoreTake(cardimetry::cardimetry_sd_mutex, portMAX_DELAY);
@@ -541,7 +572,11 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
           cm_display.tft.setTextColor(0x0000, 0xFFFF);
           cm_display.tft.setTextSize(2);
           xSemaphoreTake(cardimetry::cardimetry_wifi_mutex, portMAX_DELAY);
-          cm_display.tft.drawCentreString(String(F("Successfully connected to ")) + cardimetry_conn_wifi_scanned_ssid[selected_wifi_buf].substring(0, 17), 240, 280, 1);
+          cm_display.tft.drawCentreString(
+            String(F("Successfully connected to ")) + 
+            ((cardimetry_conn_wifi_scanned_ssid[selected_wifi_buf].length() > 11) ? (cardimetry_conn_wifi_scanned_ssid[selected_wifi_buf].substring(0, 8) + String("...")) : cardimetry_conn_wifi_scanned_ssid[selected_wifi_buf]), 
+            240, 280, 1
+          );
           xSemaphoreGive(cardimetry::cardimetry_wifi_mutex);
 
           vTaskDelay(pdMS_TO_TICKS(CARDIMETRY_DISPLAY_LOADSCREEN_WAIT_MS));
@@ -776,7 +811,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
 
         /* Actions */
         if(cm_display.actionStart() == CARDIMETRY_DISPLAY_START_ACTION_START_PUBLISH) {
-          task_state      = CARDIMETRY_DISPLAY_PATIENT_NAME_INPUT;
+          task_state      = CARDIMETRY_DISPLAY_LINKING_DEVICE;
           screen_refresh  = true;
         }
 
@@ -909,6 +944,30 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
           sleep_able      = true;
         }
         break;
+
+
+
+
+      case CARDIMETRY_DISPLAY_LINKING_DEVICE:
+        
+        /* On-screen notif */
+        if(screen_refresh) {
+          xSemaphoreTake(cardimetry::cardimetry_sd_mutex, portMAX_DELAY);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
+          xSemaphoreGive(cardimetry::cardimetry_sd_mutex);
+
+          cm_display.tft.setTextColor(0x0000, 0xFFFF);
+          cm_display.tft.setTextSize(2);
+          cm_display.tft.drawCentreString(F("Linking device to server..."), 240, 280, 1);
+
+          out_req = CARDIMETRY_CONN_REQ_LINK_DEVICE;
+          xQueueSend(cardimetry::cardimetry_conn_req_queue, &out_req, portMAX_DELAY);
+
+          vTaskDelay(pdMS_TO_TICKS(CARDIMETRY_DISPLAY_LOADSCREEN_WAIT_MS));
+          screen_refresh = false;
+        }
+        
+        break;
     
     
     
@@ -957,9 +1016,7 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
           TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           xSemaphoreGive(cardimetry::cardimetry_sd_mutex);
 
-          cm_display.tft.loadFont(cm_display.fontFile(CARDIMETRY_DISPLAY_FONT_LIGHT, 22, false), SD);
           cm_display.tft.drawCentreString(F("Retrieving patient data..."), 240, 280, 1);
-          cm_display.tft.unloadFont();
 
           out_req = CARDIMETRY_CONN_REQ_PATIENT_SEARCH;
           xQueueSend(cardimetry::cardimetry_conn_req_queue, &out_req, portMAX_DELAY);
@@ -981,7 +1038,9 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
           cm_display.tft.setTextSize(2);
           cm_display.tft.drawCentreString(F("Patient List"), 240, 17, 1);
 
+          cm_display.initPatientList();
           cm_display.drawPatientList(
+            cardimetry::cardimetry_conn_patient_search_num,
             cardimetry::cardimetry_conn_patient_search_id, 
             cardimetry::cardimetry_conn_patient_search_name, 
             0
@@ -990,6 +1049,51 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
           vTaskDelay(pdMS_TO_TICKS(CARDIMETRY_DISPLAY_LOADSCREEN_WAIT_MS));
           screen_refresh = false;
         }
+
+        /* Patient list action */
+        cm_display.actionPatientList(
+          cardimetry::cardimetry_conn_patient_search_num,
+          cardimetry::cardimetry_conn_patient_search_id, 
+          cardimetry::cardimetry_conn_patient_search_name
+        );
+        
+        selected_patient_buf = cm_display.getSelectedPatient();
+
+        if(selected_patient_buf == CARDIMETRY_DISPLAY_PATIENT_BACK) {
+          task_state      = CARDIMETRY_DISPLAY_MAIN_MENU;
+          screen_refresh  = true;
+        }
+
+        else if(selected_patient_buf != CARDIMETRY_DISPLAY_PATIENT_NOT_SELECTED) {
+          cardimetry::cardimetry_conn_patient_selected = selected_patient_buf;
+          task_state      = CARDIMETRY_DISPLAY_LINKING_PATIENT;
+          screen_refresh  = true;
+        }
+
+        break;
+
+
+
+
+      case CARDIMETRY_DISPLAY_LINKING_PATIENT:
+        
+        /* On-screen notif */
+        if(screen_refresh) {
+          xSemaphoreTake(cardimetry::cardimetry_sd_mutex, portMAX_DELAY);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
+          xSemaphoreGive(cardimetry::cardimetry_sd_mutex);
+
+          cm_display.tft.setTextColor(0x0000, 0xFFFF);
+          cm_display.tft.setTextSize(2);
+          cm_display.tft.drawCentreString(F("Linking device and patient to server..."), 240, 280, 1);
+
+          out_req = CARDIMETRY_CONN_REQ_LINK_PATIENT;
+          xQueueSend(cardimetry::cardimetry_conn_req_queue, &out_req, portMAX_DELAY);
+
+          vTaskDelay(pdMS_TO_TICKS(CARDIMETRY_DISPLAY_LOADSCREEN_WAIT_MS));
+          screen_refresh = false;
+        }
+        
         break;
 
 
@@ -1003,13 +1107,54 @@ void cardimetry::cardimetry_display_task(void* pvParameters) {
           TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_LOADSCREEN_BG_PATH);
           xSemaphoreGive(cardimetry::cardimetry_sd_mutex);
 
-          cm_display.tft.loadFont(cm_display.fontFile(CARDIMETRY_DISPLAY_FONT_LIGHT, 22, false), SD);
-          cm_display.tft.drawCentreString(F("Retrieving patient data failed."), 240, 280, 1);
-          cm_display.tft.unloadFont();
+          cm_display.tft.drawCentreString(F("Failed to retrieve patient data"), 240, 280, 1);
           
           vTaskDelay(pdMS_TO_TICKS(500));
-          task_state      = CARDIMETRY_DISPLAY_MAIN_MENU;
+          task_state = CARDIMETRY_DISPLAY_PATIENT_NAME_INPUT;
         }
+        break;
+
+
+
+
+      case CARDIMETRY_DISPLAY_PATIENT_START_PUBLISH:
+
+        /* On-screen notif */
+        if(screen_refresh) {
+          xSemaphoreTake(cardimetry::cardimetry_sd_mutex, portMAX_DELAY);
+          TJpgDec.drawSdJpg(0, 0, CARDIMETRY_DISPLAY_PUBLISH_BG_PATH);
+          xSemaphoreGive(cardimetry::cardimetry_sd_mutex);
+
+          cm_display.tft.fillRoundRect(20, 9, 85, 35, 5, 0x0000);
+          cm_display.tft.setTextColor(0xFFFF, 0x0000);
+          cm_display.tft.setTextSize(2);
+          cm_display.tft.drawCentreString(F("< BACK"), 61, 20, 1);
+          cm_display.tft.setTextColor(0x0000, 0xFFFF);
+          cm_display.tft.drawCentreString(F("Cardimetry is on service"), 240, 280, 1);
+
+          /* Send request */
+          out_req = CARDIMETRY_CONN_REQ_MQTT_PUBLISH;
+          xQueueSend(cardimetry::cardimetry_conn_req_queue, &out_req, portMAX_DELAY);
+          vTaskDelay(pdMS_TO_TICKS(500));
+
+          out_req = CARDIMETRY_SENSOR_REQ_RUN_TRANSMISSION;
+          xQueueSend(cardimetry::cardimetry_sensor_req_queue, &out_req, portMAX_DELAY);
+
+          screen_refresh = false;
+        }
+
+        if(cm_display.is_touched) {
+          
+          if(20 <= cm_display.touch_x && cm_display.touch_x <= 105 && 9 <= cm_display.touch_y && cm_display.touch_y <= 44) {
+            /* Send requests */
+            out_req = CARDIMETRY_SENSOR_REQ_STOP_TRANSMISSION;
+            xQueueSend(cardimetry::cardimetry_sensor_req_queue, &out_req, portMAX_DELAY);
+            
+            task_state      = CARDIMETRY_DISPLAY_MAIN_MENU;
+            screen_refresh  = true;
+          }
+        }
+
         break;
     }
 

@@ -8,11 +8,19 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
   uint8_t   task_state        = CARDIMETRY_CONN_IDLE,
             task_req          = CARDIMETRY_CONN_REQ_NONE,
             out_req           = 0;
-  bool      stamp_timer_free  = true;
+  bool      ecg_q1            = false,
+            ecg_q2            = false,
+            imu_q1            = false,
+            imu_q2            = false,
+            stamp_timer_free  = true;
   uint64_t  stamp_timer;
   float     battery_read  = (float)analogRead(CARDIMETRY_CONN_BAT_PIN),
             battery_perc  = (battery_read - CARDIMETRY_CONN_BAT_LOW)*100./(CARDIMETRY_CONN_BAT_FULL - CARDIMETRY_CONN_BAT_LOW),
             battery_perc_temp;
+  String    ecg_msg = "",
+            imu_msg = "",
+            uid     = "",
+            pid     = "";
   struct tm timeinfo;
 
 
@@ -53,10 +61,64 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
       case CARDIMETRY_CONN_REQ_WIFI_CONNECT:
         task_state = CARDIMETRY_CONN_WIFI_CONNECT;
         break;
+
+
+      case CARDIMETRY_CONN_REQ_LINK_DEVICE:
+        if(cm_conn.linkDevice()) {
+          out_req = CARDIMETRY_DISPLAY_REQ_LINK_DEVICE_SUCCESS;
+        }
+        else {
+          out_req = CARDIMETRY_DISPLAY_REQ_LINK_DEVICE_FAILED;
+        }
+        xQueueSend(cardimetry::cardimetry_display_req_queue, &out_req, portMAX_DELAY);
+        break;
     
     
       case CARDIMETRY_CONN_REQ_PATIENT_SEARCH:
         task_state = CARDIMETRY_CONN_PATIENT_SEARCH;
+        break;
+
+
+
+      case CARDIMETRY_CONN_REQ_LINK_PATIENT:
+        if(cm_conn.linkPatient(cardimetry::cardimetry_conn_patient_search_id[cardimetry::cardimetry_conn_patient_selected])) {
+          out_req = CARDIMETRY_DISPLAY_REQ_LINK_PATIENT_SUCCESS;
+        }
+        else {
+          out_req = CARDIMETRY_DISPLAY_REQ_LINK_PATIENT_FAILED;
+        }
+        xQueueSend(cardimetry::cardimetry_display_req_queue, &out_req, portMAX_DELAY);
+        break;
+    
+    
+      case CARDIMETRY_CONN_REQ_MQTT_PUBLISH:
+        uid = cm_conn.getUID(SD);
+        pid = String(cardimetry::cardimetry_conn_patient_search_id[cardimetry::cardimetry_conn_patient_selected]);
+        cm_conn.mqtt_client.publish((CARDIMETRY_CONN_MQTT_TOPIC_TIME + uid + String("/") + pid).c_str(), String(mktime(&timeinfo)).c_str());
+        break;
+
+
+      case CARDIMETRY_CONN_REQ_PUB_ECG1:
+        ecg_q1 = true;
+        task_state = CARDIMETRY_CONN_MQTT_PUBLISH;
+        break;
+
+
+      case CARDIMETRY_CONN_REQ_PUB_ECG2:
+        ecg_q2 = true;
+        task_state = CARDIMETRY_CONN_MQTT_PUBLISH;
+        break;
+
+
+      case CARDIMETRY_CONN_REQ_PUB_IMU1:
+        imu_q1 = true;
+        task_state = CARDIMETRY_CONN_MQTT_PUBLISH;
+        break;
+
+
+      case CARDIMETRY_CONN_REQ_PUB_IMU2:
+        imu_q2 = true;
+        task_state = CARDIMETRY_CONN_MQTT_PUBLISH;
         break;
     }
     task_req = CARDIMETRY_CONN_REQ_NONE;
@@ -80,24 +142,26 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
         cardimetry::cardimetry_conn_bat_perc = (int16_t)battery_perc;
 
         /* Receive wifi signal strength */
-        if(WiFi.status() == WL_CONNECTION_LOST || WiFi.status() == WL_DISCONNECTED) {
+        if(WiFi.status() != WL_CONNECTED) {
           cardimetry::cardimetry_conn_signal = -9999;
           WiFi.disconnect();
         }
         else {
+          /* Get WiFi RSSI */
           cardimetry::cardimetry_conn_signal = (int16_t)WiFi.RSSI();
+
+          /* Get time from NTP */
+          if(getLocalTime(&timeinfo, 400)) {
+            cardimetry::cardimetry_conn_time_sec  = timeinfo.tm_sec;
+            cardimetry::cardimetry_conn_time_mnt  = timeinfo.tm_min;
+            cardimetry::cardimetry_conn_time_hr   = timeinfo.tm_hour;
+            cardimetry::cardimetry_conn_time_wd   = timeinfo.tm_wday;
+            cardimetry::cardimetry_conn_time_md   = timeinfo.tm_wday;
+            cardimetry::cardimetry_conn_time_mth  = timeinfo.tm_mon;
+            cardimetry::cardimetry_conn_time_yr   = timeinfo.tm_year;
+          }
         }
 
-        /* Get time from NTP */
-        if(getLocalTime(&timeinfo, 500)) {
-          cardimetry::cardimetry_conn_time_sec  = timeinfo.tm_sec;
-          cardimetry::cardimetry_conn_time_mnt  = timeinfo.tm_min;
-          cardimetry::cardimetry_conn_time_hr   = timeinfo.tm_hour;
-          cardimetry::cardimetry_conn_time_wd   = timeinfo.tm_wday;
-          cardimetry::cardimetry_conn_time_md   = timeinfo.tm_wday;
-          cardimetry::cardimetry_conn_time_mth  = timeinfo.tm_mon;
-          cardimetry::cardimetry_conn_time_yr   = timeinfo.tm_year;
-        }
         xSemaphoreGive(cardimetry::cardimetry_info_mutex);
         break;
 
@@ -222,6 +286,7 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
 
         /* Get patient data */
         if(cm_conn.getPatientData(
+        &cardimetry::cardimetry_conn_patient_search_num,
         cardimetry::cardimetry_conn_patient_search_id,
         cardimetry::cardimetry_conn_patient_search_name,
         cardimetry::cardimetry_conn_patient_search_key)) {
@@ -234,6 +299,87 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
         else {
           out_req = CARDIMETRY_DISPLAY_REQ_PATIENT_SEARCH_FAILED;
           xQueueSend(cardimetry::cardimetry_display_req_queue, &out_req, portMAX_DELAY);
+        }
+
+        /* Reset to idle */
+        task_state = CARDIMETRY_CONN_IDLE;
+        break;
+
+
+
+
+      case CARDIMETRY_CONN_MQTT_PUBLISH:
+
+        /* Check connection for each loop */
+        cm_conn.mqtt_client.loop();
+
+        /* Check any data that ready to be published */
+        if(ecg_q1) {
+          ecg_msg = String("$") + cardimetry::cardimetry_sensor_ecg_ts_q1 +
+                    String("$") + cardimetry::cardimetry_sensor_ecg_lead1_q1 +
+                    String("$") + cardimetry::cardimetry_sensor_ecg_lead2_q1 +
+                    String("$") + cardimetry::cardimetry_sensor_ecg_lead3_q1;
+
+          cm_conn.mqtt_client.publish((CARDIMETRY_CONN_MQTT_TOPIC_ECG + uid + String("/") + pid).c_str(), ecg_msg.c_str());
+
+          cardimetry::cardimetry_sensor_ecg_ts_q1     = "";
+          cardimetry::cardimetry_sensor_ecg_lead1_q1  = "";
+          cardimetry::cardimetry_sensor_ecg_lead2_q1  = "";
+          cardimetry::cardimetry_sensor_ecg_lead3_q1  = "";
+
+          ecg_q1 = false;
+        }
+
+        if(ecg_q2) {
+          ecg_msg = String("$") + cardimetry::cardimetry_sensor_ecg_ts_q2 +
+                    String("$") + cardimetry::cardimetry_sensor_ecg_lead1_q2 +
+                    String("$") + cardimetry::cardimetry_sensor_ecg_lead2_q2 +
+                    String("$") + cardimetry::cardimetry_sensor_ecg_lead3_q2;
+
+          cm_conn.mqtt_client.publish((CARDIMETRY_CONN_MQTT_TOPIC_ECG + uid + String("/") + pid).c_str(), ecg_msg.c_str());
+
+          cardimetry::cardimetry_sensor_ecg_ts_q2     = "";
+          cardimetry::cardimetry_sensor_ecg_lead1_q2  = "";
+          cardimetry::cardimetry_sensor_ecg_lead2_q2  = "";
+          cardimetry::cardimetry_sensor_ecg_lead3_q2  = "";
+
+          ecg_q2 = false;
+        }
+
+        if(imu_q1) {
+          imu_msg = String("$") + cardimetry::cardimetry_sensor_imu_ts_q1 + 
+                    String("$") + cardimetry::cardimetry_sensor_imu_qw_q1 +
+                    String("$") + cardimetry::cardimetry_sensor_imu_qx_q1 +
+                    String("$") + cardimetry::cardimetry_sensor_imu_qy_q1 +
+                    String("$") + cardimetry::cardimetry_sensor_imu_qz_q1;
+
+          cm_conn.mqtt_client.publish((CARDIMETRY_CONN_MQTT_TOPIC_IMU + uid + String("/") + pid).c_str(), imu_msg.c_str());
+
+          cardimetry::cardimetry_sensor_imu_ts_q1 = "";
+          cardimetry::cardimetry_sensor_imu_qw_q1 = "";
+          cardimetry::cardimetry_sensor_imu_qx_q1 = "";
+          cardimetry::cardimetry_sensor_imu_qy_q1 = "";
+          cardimetry::cardimetry_sensor_imu_qz_q1 = "";
+
+          imu_q1 = false;
+        }
+
+        if(imu_q2) {
+          imu_msg = String("$") + cardimetry::cardimetry_sensor_imu_ts_q2 + 
+                    String("$") + cardimetry::cardimetry_sensor_imu_qw_q2 +
+                    String("$") + cardimetry::cardimetry_sensor_imu_qx_q2 +
+                    String("$") + cardimetry::cardimetry_sensor_imu_qy_q2 +
+                    String("$") + cardimetry::cardimetry_sensor_imu_qz_q2;
+
+          cm_conn.mqtt_client.publish((CARDIMETRY_CONN_MQTT_TOPIC_IMU + uid + String("/") + pid).c_str(), imu_msg.c_str());
+
+          cardimetry::cardimetry_sensor_imu_ts_q2 = "";
+          cardimetry::cardimetry_sensor_imu_qw_q2 = "";
+          cardimetry::cardimetry_sensor_imu_qx_q2 = "";
+          cardimetry::cardimetry_sensor_imu_qy_q2 = "";
+          cardimetry::cardimetry_sensor_imu_qz_q2 = "";
+
+          imu_q2 = false;
         }
 
         /* Reset to idle */

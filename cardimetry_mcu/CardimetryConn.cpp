@@ -20,10 +20,16 @@ void cardimetry::CardimetryConn::begin() {
     CARIDMETRY_CONN_NTP_SERVER_2
   );
 
+
   /* Start ESP32 WiFi as station */
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   vTaskDelay(pdMS_TO_TICKS(CARDIMETRY_CONN_WIFI_WAIT_TIME_MS));
+
+
+  /* Start MQTT */
+  // mqtt_client.enableDebuggingMessages();
+  mqtt_client.setMaxPacketSize(CARDIMETRY_CONN_MQTT_BUFFER_SIZE);
 }
 
 
@@ -79,12 +85,44 @@ void cardimetry::CardimetryConn::saveConnWiFiTable(fs::FS &fs, String ssid, Stri
 
 
 
-bool cardimetry::CardimetryConn::getPatientData(uint16_t id_buf[], String name_buf[], String key) {
+bool cardimetry::CardimetryConn::linkDevice() {
+  String uid = this->getUID(SD);
+  HTTPClient http;
+  http.begin(
+    String("http://") + String(CARDIMETRY_CONN_BASE_SERVICE_IP) + String(":8000") + String(CARDIMETRY_CONN_API_LINK_DEVICE) + uid
+  );
+
+  /* POST */
+  int http_code = http.POST("");
+  if(http_code == HTTP_CODE_OK) return true;
+  else return false;
+}
+
+
+
+
+bool cardimetry::CardimetryConn::linkPatient(uint16_t patient_id) {
+  String uid = this->getUID(SD);
+  HTTPClient http;
+  http.begin(
+    String("http://") + String(CARDIMETRY_CONN_BASE_SERVICE_IP) + String(":8000") + String(CARDIMETRY_CONN_API_LINK_DEVICE) + uid + String("/") + patient_id
+  );
+
+  /* POST */
+  int http_code = http.POST("");
+  if(http_code == HTTP_CODE_OK) return true;
+  else return false;
+}
+
+
+
+
+bool cardimetry::CardimetryConn::getPatientData(uint16_t* num, uint16_t id_buf[], String name_buf[], String key) {
   
   /* Start HTTP client */
   HTTPClient http;
   http.begin(
-    String(CARDIMETRY_CONN_BASE_SERVICE_URL) + String(CARDIMETRY_CONN_API_PATIENT_SEARCH) + key
+    String("http://") + String(CARDIMETRY_CONN_BASE_SERVICE_IP) + String(":8000") + String(CARDIMETRY_CONN_API_PATIENT_SEARCH) + key
   );
 
   /* GET */
@@ -96,6 +134,10 @@ bool cardimetry::CardimetryConn::getPatientData(uint16_t id_buf[], String name_b
     String payload = http.getString();
     DynamicJsonDocument json_doc(4096);
     deserializeJson(json_doc, payload);
+    *num = json_doc.size();
+
+    if(*num == 0) return false;
+
     for(uint8_t i = 0; i < (uint8_t)min((int)CARDIMETRY_CONN_MAX_PATIENT_SEARCH, (int)json_doc.size()); ++i) {
       id_buf[i]   = (uint8_t)json_doc[i]["patient_id"].as<int>();
       name_buf[i] = json_doc[i]["name"].as<String>();
@@ -112,3 +154,27 @@ bool cardimetry::CardimetryConn::getPatientData(uint16_t id_buf[], String name_b
 
   return false;
 }
+
+
+
+
+String cardimetry::CardimetryConn::getUID(fs::FS &fs) {
+  if(fs.exists(F("/cmconfig.json"))) {
+
+    /* Open config file */
+    File cmconfig = fs.open(F("/cmconfig.json"), FILE_READ);
+    String json_str = cmconfig.readString();
+    cmconfig.close();
+
+    /* Deserialize Json */
+    DynamicJsonDocument json_doc(1024);
+    deserializeJson(json_doc, json_str);
+    return json_doc["uid"].as<String>();
+  }
+  else return "cmxxx";
+}
+
+
+
+
+void onConnectionEstablished() {}

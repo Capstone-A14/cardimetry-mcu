@@ -13,7 +13,6 @@ void cardimetry::CardimetryDisplay::begin() {
 
   /* Pinmoding nessecary pins */
   pinMode(CARDIMETRY_DISPLAY_TFT_LED, OUTPUT);
-  pinMode(CARDIMETRY_DISPLAY_TFT_LED, OUTPUT);
   digitalWrite(CARDIMETRY_DISPLAY_TFT_LED, HIGH);
 
 
@@ -63,7 +62,10 @@ void cardimetry::CardimetryDisplay::sleepCount(bool sleep_able) {
       last_touch_ms = millis();
       if(is_sleep) {
         digitalWrite(CARDIMETRY_DISPLAY_TFT_LED, HIGH);
-        is_sleep = false;
+        this->is_touched  = false;
+        this->touch_x     = 0;
+        this->touch_y     = 0;
+        is_sleep          = false;
       }
     }
     else {
@@ -168,10 +170,15 @@ void cardimetry::CardimetryDisplay::drawWiFiList(int16_t num, String ssid[], int
   this->wifi_selected = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
 
 
-  /* Draw column header */
-  this->tft.fillRect(10, 50, 460, 38, 0x0000);
+  /* Draw button to proceed */
+  this->tft.fillRoundRect(20, 9, 85, 35, 5, 0x0000);
   this->tft.setTextColor(0xFFFF, 0x0000);
   this->tft.setTextSize(2);
+  this->tft.drawCentreString(F("< SKIP"), 61, 20, 1);
+
+
+  /* Draw column header */
+  this->tft.fillRect(10, 50, 460, 38, 0x0000);
   this->tft.drawCentreString(F("No."), 35, 60, 1);
   this->tft.drawCentreString(F("SSID"), 180, 60, 1);
   this->tft.drawCentreString(F("RSSI"), 330, 60, 1);
@@ -292,6 +299,11 @@ uint8_t cardimetry::CardimetryDisplay::getSelectedWiFi() {
   if(this->wifi_selected != 99 && 375 <= this->touch_x && this->touch_x <= 460 && 9 <= this->touch_y && this->touch_y <= 44) {
     return this->wifi_selected;
   }
+
+  else if(20 <= this->touch_x && this->touch_x <= 105 && 9 <= this->touch_y && this->touch_y <= 44) {
+    return CARDIMETRY_DISPLAY_WIFI_SKIP;
+  }
+
   else {
     return CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
   }
@@ -324,52 +336,166 @@ bool cardimetry::CardimetryDisplay::isWiFiTableExist(fs::FS &fs, String* buf, St
   else {
     return false;
   }
-} 
-
-
-
-
-void cardimetry::CardimetryDisplay::drawPatientList(uint16_t id[], String name[], uint8_t offset) {
-  
-  /* Reset */
-  this->patient_selected = CARDIMETRY_DISPLAY_WIFI_NOT_SELECTED;
-
-
-  /* Draw column header */
-  this->tft.fillRect(10, 50, 460, 38, 0x0000);
-  this->tft.setTextColor(0xFFFF, 0x0000);
-  this->tft.setTextSize(2);
-  this->tft.drawCentreString(F("Patient ID"), 50, 60, 1);
-  this->tft.drawCentreString(F("Patient Name"), 300, 60, 1);
-
-
-  /* Draw table entries */
-  for(uint8_t i = offset; i < offset + 7; ++i) {
-
-    /* Draw a rectangle */
-    this->tft.drawRect(10, 88 + 31*i, 460, 31, 0x7BCF);
-
-    /* Show number */
-    this->tft.setTextColor(0x0000, 0xFFFF);
-    this->tft.drawCentreString(String(id[i]), 50, 97 + 31*i, 1);
-    
-    /* Show name */
-    if(name[i].length() > 28)
-      this->tft.drawCentreString(name[i].substring(0, 25) + String("..."), 300, 97 + 31*i, 1);
-    else
-      this->tft.drawCentreString(name[i], 300, 97 + 31*i, 1);
-  }
-
-
-  /* Draw outer rectangle */
-  this->tft.drawRect(10, 50, 460, 256, 0x0000);
 }
 
 
 
 
-void cardimetry::CardimetryDisplay::actionPatientList(uint16_t id[], String name[], uint8_t offset) {
+void cardimetry::CardimetryDisplay::initPatientList() {
+  this->patient_selected    = CARDIMETRY_DISPLAY_PATIENT_NOT_SELECTED;
+  this->init_patient_list   = true;
+  this->patient_offset      = 0;
+}
 
+
+
+
+void cardimetry::CardimetryDisplay::drawPatientList(uint16_t num, uint16_t id[], String name[], uint8_t offset) {
+
+  /* Reset */
+  if(this->init_patient_list) {
+
+    /* Back button */
+    this->tft.fillRoundRect(20, 9, 85, 35, 5, 0x0000);
+    this->tft.setTextColor(0xFFFF, 0x0000);
+    this->tft.setTextSize(2);
+    this->tft.drawCentreString(F("< BACK"), 61, 20, 1);
+
+    /* Draw column header */
+    this->tft.fillRect(40, 50, 430, 38, 0x0000);
+    this->tft.drawCentreString(F("ID"), 80, 60, 1);
+    this->tft.drawCentreString(F("Name"), 310, 60, 1);
+
+    /* Draw up and down arrow */
+    this->tft.fillRect(10, 50, 30, 30, 0x39C7);
+    this->tft.fillRect(10, 276, 30, 30, 0x39C7);
+    this->tft.setTextColor(0xFFFF, 0x39C7);
+    this->tft.drawCentreString(F("V"), 26, 287, 1);
+    this->tft.setTextSize(3);
+    this->tft.drawCentreString(F("^"), 26, 67, 1);
+
+    /* Calculate the partition */
+    this->patient_bar_part  = num/7 + ((num%7 > 0) ? 1 : 0);
+    this->patient_bar_h     = 194/this->patient_bar_part;
+
+    /* Turn off init */
+    this->init_patient_list = false;
+  }
+
+  /* Draw scrollbar */
+  this->tft.fillRect(10, 80, 30, 196, 0x0000);
+  this->tft.drawRect(10, 80, 30, 196, 0x52AA);
+  this->tft.fillRect(11, 81 + (offset/7)*this->patient_bar_h, 28, 194/this->patient_bar_part, 0x52AA);
+
+  /* Draw table entries */
+  for(uint8_t i = 0; i < (uint8_t)min((int)7, (int)(num - offset)); ++i) {
+
+    /* Draw a rectangle */
+    this->tft.fillRect(40, 88 + 31*i, 430, 31, 0xFFFF);
+    this->tft.drawRect(40, 88 + 31*i, 430, 31, 0x7BCF);
+
+    /* Show number */
+    this->tft.setTextColor(0x0000, 0xFFFF);
+    this->tft.setTextSize(2);
+    this->tft.drawCentreString(String(id[offset + i]), 80, 97 + 31*i, 1);
+    
+    /* Show name */
+    if(name[offset + i].length() > 25)
+      this->tft.drawCentreString(name[offset + i].substring(0, 22) + String("..."), 310, 97 + 31*i, 1);
+    else
+      this->tft.drawCentreString(name[offset + i], 310, 97 + 31*i, 1);
+  }
+
+  /* Draw outer rectangle */
+  this->tft.drawRect(40, 50, 430, 256, 0x0000);
+}
+
+
+
+
+void cardimetry::CardimetryDisplay::actionPatientList(uint16_t num, uint16_t id[], String name[]) {
+
+  if(this->is_touched) {
+
+    if(10 <= this->touch_x && this->touch_x <= 40) {
+
+      if(50 <= this->touch_y && this->touch_y <= 80) {
+        this->patient_offset = (this->patient_offset >= 7) ? this->patient_offset - 7 : 0; 
+      }
+
+      else if(276 <= this->touch_y && this->touch_y <= 306) {
+        this->patient_offset = (this->patient_offset == this->patient_bar_part) ? this->patient_bar_part : this->patient_offset + 7;
+      }
+
+      else if(80 <= this->touch_y && this->touch_y <= 276) {
+        for(uint16_t i = 0; i < this->patient_bar_part; ++i) {
+          if(80 + i*this->patient_bar_h <= this->touch_y && this->touch_y <= 80 + i*this->patient_bar_h + 195/this->patient_bar_part) {
+            this->patient_offset = i*7;
+            break;
+          }
+        }
+      }
+
+      this->drawPatientList(num, id, name, this->patient_offset);
+    }
+
+    else if(40 <= this->touch_x && this->touch_x <= 470) {
+
+      /* Evaluate only y-touch value */
+      for(uint8_t i = 0; i < (uint8_t)min(7, (int)num); ++i) {
+
+        if((88 + 31*i) <= this->touch_y && this->touch_y < (88 + 31*(i + 1))) {
+          
+          if(this->patient_selected == CARDIMETRY_DISPLAY_PATIENT_NOT_SELECTED) {
+            
+            /* Select the patient */
+            this->patient_selected = this->patient_offset + i;
+
+            /* Draw button to proceed */
+            this->tft.fillRoundRect(375, 9, 85, 35, 5, 0x0000);
+            this->tft.setTextColor(0xFFFF, 0x0000);
+            this->tft.setTextSize(2);
+            this->tft.drawCentreString(F("OK >"), 423, 20, 1);
+          }
+
+          else if(this->patient_selected != i) {
+          
+            /* Return the previous selection */
+            this->tft.fillRect(40, 88 + 31*(this->patient_selected % 7), 430, 31, 0xFFFF);
+            this->tft.drawRect(40, 88 + 31*(this->patient_selected % 7), 430, 31, 0x7BCF);
+            this->tft.setTextColor(0x0000, 0xFFFF);
+            this->tft.setTextSize(2);
+            this->tft.drawCentreString(String(id[this->patient_selected]), 80, 97 + 31*(this->patient_selected%7), 1);
+
+            /* Show name */
+            if(name[this->patient_selected].length() > 25)
+              this->tft.drawCentreString(name[this->patient_selected].substring(0, 22) + String("..."), 310, 97 + 31*(this->patient_selected%7), 1);
+            else
+              this->tft.drawCentreString(name[this->patient_selected], 310, 97 + 31*(this->patient_selected%7), 1);
+
+            /* Select the patient */
+            this->patient_selected = this->patient_offset + i;
+          }
+
+          /* Add touched effect */
+          this->tft.fillRect(40, 88 + 31*i, 430, 31, 0x6B4D);
+          this->tft.setTextColor(0xFFFF, 0x6B4D);
+          this->tft.drawCentreString(String(id[this->patient_selected]), 80, 97 + 31*i, 1);
+
+          /* Show name */
+          if(name[this->patient_selected].length() > 25)
+            this->tft.drawCentreString(name[this->patient_selected].substring(0, 22) + String("..."), 310, 97 + 31*i, 1);
+          else
+            this->tft.drawCentreString(name[this->patient_selected], 310, 97 + 31*i, 1);
+            
+          /* Outer rectangle */
+          this->tft.drawRect(40, 50, 430, 256, 0x0000);
+
+          break;
+        }
+      }
+    }
+  }
 }
 
 
@@ -377,6 +503,21 @@ void cardimetry::CardimetryDisplay::actionPatientList(uint16_t id[], String name
 
 uint8_t cardimetry::CardimetryDisplay::getSelectedPatient() {
 
+  if(this->is_touched) {
+
+    if(9 <= this->touch_y && this->touch_y <= 44) {
+
+      if(20 <= this->touch_x && this->touch_x <= 105) {
+        return CARDIMETRY_DISPLAY_PATIENT_BACK;
+      }
+
+      else if(375 <= this->touch_x && this->touch_x <= 460) {
+        return this->patient_selected;
+      }
+    }
+  }
+
+  return CARDIMETRY_DISPLAY_PATIENT_NOT_SELECTED;
 }
 
 
@@ -638,6 +779,9 @@ void cardimetry::CardimetryDisplay::drawInfoBar(uint16_t time_hr, uint16_t time_
     this->tft.setCursor(185, 11);
     this->tft.printf("%02d:%02d WIB", time_hr, time_mnt);
 
+    /* Unload font to create space on RAM */
+    this->tft.unloadFont();
+
     /* Draw signal strength */
     if(sig == 4) {
       this->tft.fillRect(340, 25, 10, 5, 0xFFFF);
@@ -675,7 +819,8 @@ void cardimetry::CardimetryDisplay::drawInfoBar(uint16_t time_hr, uint16_t time_
       this->tft.drawRect(366, 15, 10, 15, 0xFFFF);
       this->tft.drawRect(379, 10, 10, 20, 0xFFFF);
       this->tft.setTextColor(0xE800);
-      this->tft.drawCentreString("X", 359, 18, 1);
+      this->tft.setTextSize(3);
+      this->tft.drawCentreString("X", 378, 8, 1);
     }
 
     /* Draw battery percentage */
@@ -690,9 +835,6 @@ void cardimetry::CardimetryDisplay::drawInfoBar(uint16_t time_hr, uint16_t time_
     last_hr             = time_hr;
     last_sig            = sig;
     last_bat            = bat;
-    
-    /* Unload font to create space on RAM */
-    this->tft.unloadFont();
   }
 
   if(last_hr != time_hr || last_mnt != time_mnt) {
@@ -967,9 +1109,9 @@ void cardimetry::CardimetryDisplay::ecgPlot(uint64_t* timestamp, int32_t* lead1,
     
     last_x  = this->convertEcgTs2Plot(0);
 
-    last_y1 = this->convertEcgLead2Plot(lead1[0]);
-    last_y2 = this->convertEcgLead2Plot(lead2[0]);
-    last_y3 = this->convertEcgLead2Plot(lead3[0]);
+    last_y1 = this->convertEcgLead2Plot(lead1[0] - 724);
+    last_y2 = this->convertEcgLead2Plot(lead2[0] - 78);
+    last_y3 = this->convertEcgLead2Plot(lead3[0] - 670);
   }
 
   for(uint8_t i = 0; i < 50; ++i) {
@@ -982,9 +1124,12 @@ void cardimetry::CardimetryDisplay::ecgPlot(uint64_t* timestamp, int32_t* lead1,
 
     /* Determine current value*/
     current_x   = this->convertEcgTs2Plot(timestamp[i] - zero_ts);
-    current_y1  = this->convertEcgLead2Plot(lead1[i]);
-    current_y2  = this->convertEcgLead2Plot(lead2[i]);
-    current_y3  = this->convertEcgLead2Plot(lead3[i]);
+    current_y1  = this->convertEcgLead2Plot(lead1[i] - 724);
+    current_y2  = this->convertEcgLead2Plot(lead2[i] - 78);
+    current_y3  = this->convertEcgLead2Plot(lead3[i] - 670);
+    // Serial.println(lead1[i]);
+    // Serial.println(lead2[i]);
+    // Serial.println(lead3[i]);
 
     /* If overflow */
     if(current_x > 470) {
@@ -1365,7 +1510,7 @@ uint16_t cardimetry::CardimetryDisplay::convertEcgTs2Plot(uint64_t time) {
 
 
 uint16_t cardimetry::CardimetryDisplay::convertEcgLead2Plot(int32_t lead) {
-  int32_t res = lead/10;
+  int32_t res = lead;
   if(res < 0) {
     res = 0;
   }
