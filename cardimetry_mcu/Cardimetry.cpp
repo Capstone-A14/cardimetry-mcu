@@ -123,7 +123,7 @@ void cardimetry::cardimetry_begin() {
   cardimetry::cardimetry_sensor_req_queue       = xQueueCreate(CARDIMETRY_SENSOR_TASK_REQ_QUEUE_LEN, sizeof(uint8_t));
   // cardimetry::cardimetry_uart_req_queue         = xQueueCreate(CARDIMETRY_UART_TASK_REQ_QUEUE_LEN, sizeof(uint8_t));
   
-  Serial.begin(115200);
+  // Serial.begin(115200);
 
   /* Execute tasks */
   xTaskCreatePinnedToCore(

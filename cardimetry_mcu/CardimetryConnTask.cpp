@@ -147,6 +147,9 @@ void cardimetry::cardimetry_conn_task(void* pvParameters) {
           WiFi.disconnect();
         }
         else {
+          /* Keeping alive MQTT connection */
+          cm_conn.mqtt_client.loop();
+
           /* Get WiFi RSSI */
           cardimetry::cardimetry_conn_signal = (int16_t)WiFi.RSSI();
 

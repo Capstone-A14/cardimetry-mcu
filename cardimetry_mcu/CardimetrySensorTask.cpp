@@ -5,19 +5,20 @@
 void cardimetry::cardimetry_sensor_task(void* pvParameters) {
 
   /* Local variables */
-  uint8_t task_state      = CARDIMETRY_SENSOR_IDLE,
-          task_req        = CARDIMETRY_SENSOR_REQ_NONE,
-          out_req         = 0,
-          ecg_state       = CARDIMETRY_SENSOR_HALT,
-          imu_state       = CARDIMETRY_SENSOR_HALT,
-          ecg_cnt         = 0,
-          imu_cnt         = 0;
-  bool    ecg_qs          = CARDIMETRY_SENSOR_ECG_QUEUE1,
-          imu_qs          = CARDIMETRY_SENSOR_IMU_QUEUE1,
-          imu_rel_cnt     = true;
-  int32_t lead1,
-          lead2,
-          lead3;
+  uint8_t   task_state      = CARDIMETRY_SENSOR_IDLE,
+            task_req        = CARDIMETRY_SENSOR_REQ_NONE,
+            out_req         = 0,
+            ecg_state       = CARDIMETRY_SENSOR_HALT,
+            imu_state       = CARDIMETRY_SENSOR_HALT,
+            ecg_cnt         = 0,
+            imu_cnt         = 0;
+  bool      ecg_qs          = CARDIMETRY_SENSOR_ECG_QUEUE1,
+            imu_qs          = CARDIMETRY_SENSOR_IMU_QUEUE1,
+            imu_rel_cnt     = true;
+  int32_t   lead1,
+            lead2,
+            lead3;
+  uint64_t  start_trans_time;
 
   // sfe_ism_raw_data_t accel_data; 
   // sfe_ism_raw_data_t gyro_data;
@@ -120,9 +121,10 @@ void cardimetry::cardimetry_sensor_task(void* pvParameters) {
     
 
       case CARDIMETRY_SENSOR_REQ_RUN_TRANSMISSION:
-        ecg_state   = CARDIMETRY_SENSOR_READ;
-        imu_state   = CARDIMETRY_SENSOR_READ;
-        task_state  = CARDIMETRY_SENSOR_RUN_TRANSMISSION;
+        ecg_state         = CARDIMETRY_SENSOR_READ;
+        imu_state         = CARDIMETRY_SENSOR_READ;
+        task_state        = CARDIMETRY_SENSOR_RUN_TRANSMISSION;
+        start_trans_time  = millis(); 
         break;
 
 
@@ -211,13 +213,13 @@ void cardimetry::cardimetry_sensor_task(void* pvParameters) {
 
             /* Insert to queue */
             if(ecg_qs == CARDIMETRY_SENSOR_ECG_QUEUE1) {
-              cardimetry::cardimetry_sensor_ecg_ts_q1     += String(millis()) + String(",");
+              cardimetry::cardimetry_sensor_ecg_ts_q1     += String(millis() - start_trans_time) + String(",");
               cardimetry::cardimetry_sensor_ecg_lead1_q1  += String(lead1) + String(",");
               cardimetry::cardimetry_sensor_ecg_lead2_q1  += String(lead2) + String(",");
               cardimetry::cardimetry_sensor_ecg_lead3_q1  += String(lead3) + String(",");
             }
             else if(ecg_qs == CARDIMETRY_SENSOR_ECG_QUEUE2) {
-              cardimetry::cardimetry_sensor_ecg_ts_q2     += String(millis()) + String(",");
+              cardimetry::cardimetry_sensor_ecg_ts_q2     += String(millis() - start_trans_time) + String(",");
               cardimetry::cardimetry_sensor_ecg_lead1_q2  += String(lead1) + String(",");
               cardimetry::cardimetry_sensor_ecg_lead2_q2  += String(lead2) + String(",");
               cardimetry::cardimetry_sensor_ecg_lead3_q2  += String(lead3) + String(",");
@@ -272,7 +274,7 @@ void cardimetry::cardimetry_sensor_task(void* pvParameters) {
 
             /* Insert to queue */
             if(imu_qs == CARDIMETRY_SENSOR_IMU_QUEUE1) {
-              cardimetry::cardimetry_sensor_imu_ts_q1 += String(millis()) + String(",");
+              cardimetry::cardimetry_sensor_imu_ts_q1 += String(millis() - start_trans_time) + String(",");
               cardimetry::cardimetry_sensor_imu_qw_q1 += String(qw) + String(",");
               cardimetry::cardimetry_sensor_imu_qx_q1 += String(qx) + String(",");
               cardimetry::cardimetry_sensor_imu_qy_q1 += String(qy) + String(",");
@@ -280,7 +282,7 @@ void cardimetry::cardimetry_sensor_task(void* pvParameters) {
             }
 
             else if(imu_qs == CARDIMETRY_SENSOR_IMU_QUEUE2) {
-              cardimetry::cardimetry_sensor_imu_ts_q2 += String(millis()) + String(",");
+              cardimetry::cardimetry_sensor_imu_ts_q2 += String(millis() - start_trans_time) + String(",");
               cardimetry::cardimetry_sensor_imu_qw_q2 += String(qw) + String(",");
               cardimetry::cardimetry_sensor_imu_qx_q2 += String(qx) + String(",");
               cardimetry::cardimetry_sensor_imu_qy_q2 += String(qy) + String(",");
